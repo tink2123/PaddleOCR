@@ -169,6 +169,9 @@ class SimpleReader(object):
                 image_file_list = get_image_file_list(self.infer_img)
                 for single_img in image_file_list:
                     img = cv2.imread(single_img)
+                    if img is None:
+                        logger.info("{} does not exist!".format(single_img))
+                        continue
                     if img.shape[-1]==1 or len(list(img.shape))==2:
                         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
                     norm_img = process_image(img, self.image_shape)

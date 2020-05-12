@@ -115,7 +115,7 @@ def main():
         target_var.append(values)
 
     fluid.io.save_inference_model(
-        "./output/",
+        "./rec_inference/",
         feeded_var_names=['image'],
         target_vars=target_var,
         executor=exe,
