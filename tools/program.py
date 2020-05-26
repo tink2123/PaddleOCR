@@ -173,13 +173,15 @@ def build(config, main_prog, startup_prog, mode):
             if mode == "train":
                 opt_loss = outputs['total_loss']
                 opt_params = config['Optimizer']
-                optimizer = create_module(opt_params['function'])(opt_params)
+                optimizer, lr_decay = create_module(opt_params['function'])(opt_params)
                 optimizer.minimize(opt_loss)
                 opt_loss_name = opt_loss.name
-                global_lr = optimizer._global_learning_rate()
-                global_lr.persistable = True
+                #global_lr = optimizer._global_learning_rate()
+                #global_lr.persistable = True
+                lr_decay.persistable = True
                 fetch_name_list.insert(0, "lr")
-                fetch_varname_list.insert(0, global_lr.name)
+                fetch_varname_list.insert(0,lr_decay.name)
+                #fetch_varname_list.insert(0, global_lr.name)
     return (dataloader, fetch_name_list, fetch_varname_list, opt_loss_name)
 
 
