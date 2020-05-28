@@ -8,6 +8,7 @@ PaddleOCR旨在打造一套丰富、领先、且实用的OCR工具库，助力�
     - 检测模型DB（4.1M）+识别模型CRNN（4.5M）
 - 多种文本检测训练算法，EAST、DB
 - 多种文本识别训练算法，Rosetta、CRNN、STAR-Net、RARE
+- 支持多平台预测训练：linux,mac(cpu),windows(cpu)
 
 ## **超轻量级中文OCR体验**
 
