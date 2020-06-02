@@ -25,7 +25,7 @@ from ppocr.utils.utility import initial_logger
 from ppocr.utils.utility import get_image_file_list
 logger = initial_logger()
 
-from .img_tools import process_image, get_img_data
+from .img_tools import process_image, get_img_data, warp
 
 
 class LMDBReader(object):
@@ -40,8 +40,10 @@ class LMDBReader(object):
         self.loss_type = params['loss_type']
         self.max_text_length = params['max_text_length']
         self.mode = params['mode']
+        self.distort = False
         if params['mode'] == 'train':
             self.batch_size = params['train_batch_size_per_card']
+            self.distort = params['distort']
         elif params['mode'] == "eval":
             self.batch_size = params['test_batch_size_per_card']
         elif params['mode'] == "test":
@@ -125,6 +127,18 @@ class LMDBReader(object):
                             if sample_info is None:
                                 continue
                             img, label = sample_info
+                            angs = [10,45,75]
+                            if self.distort:
+                                if "MJ" in lmdb_sets[dataset_idx]['dirpath']:
+                                    ratio = random.randint(0,4)
+                                    if ratio > 2:
+                                        img = warp(img,random.choice(angs))
+                                if "ST" in lmdb_sets[dataset_idx]['dirpath']:
+                                    for char in label:
+                                        if char.lower() not in string.printable[:36]:
+                                            ratio = random.randint(0,1)
+                                            if ratio:
+                                                img = warp(img,10)
                             outs = process_image(img, self.image_shape, label,
                                                  self.char_ops, self.loss_type,
                                                  self.max_text_length)
