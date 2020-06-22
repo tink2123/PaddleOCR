@@ -26,7 +26,7 @@ from ppocr.utils.utility import initial_logger
 from ppocr.utils.utility import get_image_file_list
 logger = initial_logger()
 
-from .img_tools import process_image, get_img_data
+from .img_tools import process_image, process_image_srn, get_img_data
 
 
 class LMDBReader(object):
@@ -40,24 +40,24 @@ class LMDBReader(object):
         self.image_shape = params['image_shape']
         self.loss_type = params['loss_type']
         self.max_text_length = params['max_text_length']
+        self.num_heads = params['num_heads']
         self.mode = params['mode']
-        self.drop_last = False
-        self.use_tps = False
-        if "tps" in params:
-            self.ues_tps = True
         if params['mode'] == 'train':
             self.batch_size = params['train_batch_size_per_card']
-            self.drop_last = True
-        else:
+        elif params['mode'] == "eval":
             self.batch_size = params['test_batch_size_per_card']
-            self.drop_last = False
-        self.infer_img = params['infer_img']
+        elif params['mode'] == "test":
+            self.batch_size = 1
+            self.infer_img = params["infer_img"]
 
     def load_hierarchical_lmdb_dataset(self):
         lmdb_sets = {}
         dataset_idx = 0
-        for dirpath, dirnames, filenames in os.walk(self.lmdb_sets_dir + '/'):
-            if not dirnames:
+        #for dirpath, dirnames, filenames in os.walk(self.lmdb_sets_dir + '/'):
+        #if not dirnames:
+        if self.lmdb_sets_dir.find("srn_train") >= 0:
+            for i in range(10):
+                dirpath = self.lmdb_sets_dir + '/set_' + str(i) + "/"
                 env = lmdb.open(
                     dirpath,
                     max_readers=32,
@@ -70,6 +70,23 @@ class LMDBReader(object):
                 lmdb_sets[dataset_idx] = {"dirpath":dirpath, "env":env, \
                     "txn":txn, "num_samples":num_samples}
                 dataset_idx += 1
+        else:
+            for dirpath, dirnames, filenames in os.walk(self.lmdb_sets_dir +
+                                                        '/'):
+                if not dirnames:
+                    env = lmdb.open(
+                        dirpath,
+                        max_readers=32,
+                        readonly=True,
+                        lock=False,
+                        readahead=False,
+                        meminit=False)
+                    txn = env.begin(write=False)
+                    num_samples = int(txn.get('num-samples'.encode()))
+                    lmdb_sets[dataset_idx] = {"dirpath":dirpath, "env":env, \
+                        "txn":txn, "num_samples":num_samples}
+                    dataset_idx += 1
+
         return lmdb_sets
 
     def print_lmdb_sets_info(self, lmdb_sets):
@@ -105,18 +122,23 @@ class LMDBReader(object):
             process_id = 0
 
         def sample_iter_reader():
-            if self.mode != 'train' and self.infer_img is not None:
+            if self.loss_type == "srn" and self.mode == 'test':
                 image_file_list = get_image_file_list(self.infer_img)
                 for single_img in image_file_list:
                     img = cv2.imread(single_img)
                     if img.shape[-1] == 1 or len(list(img.shape)) == 2:
                         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-                    norm_img = process_image(
-                        img=img,
-                        image_shape=self.image_shape,
-                        char_ops=self.char_ops,
-                        tps=self.use_tps,
-                        infer_mode=True)
+                    outs = process_image_srn(img, self.image_shape,
+                                             self.num_heads,
+                                             self.max_text_length)
+                    yield outs
+            elif self.mode == 'test':
+                image_file_list = get_image_file_list(self.infer_img)
+                for single_img in image_file_list:
+                    img = cv2.imread(single_img)
+                    if img.shape[-1] == 1 or len(list(img.shape)) == 2:
+                        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+                    norm_img = process_image(img, self.image_shape)
                     yield norm_img
             else:
                 lmdb_sets = self.load_hierarchical_lmdb_dataset()
@@ -136,13 +158,17 @@ class LMDBReader(object):
                             if sample_info is None:
                                 continue
                             img, label = sample_info
-                            outs = process_image(
-                                img=img,
-                                image_shape=self.image_shape,
-                                label=label,
-                                char_ops=self.char_ops,
-                                loss_type=self.loss_type,
-                                max_text_length=self.max_text_length)
+                            outs = []
+                            if self.loss_type == "srn":
+                                outs = process_image_srn(
+                                    img, self.image_shape, self.num_heads,
+                                    self.max_text_length, label, self.char_ops,
+                                    self.loss_type)
+
+                            else:
+                                outs = process_image(
+                                    img, self.image_shape, label, self.char_ops,
+                                    self.loss_type, self.max_text_length)
                             if outs is None:
                                 continue
                             yield outs
@@ -158,11 +184,10 @@ class LMDBReader(object):
                 if len(batch_outs) == self.batch_size:
                     yield batch_outs
                     batch_outs = []
-            if not self.drop_last:
-                if len(batch_outs) != 0:
-                    yield batch_outs
+            if len(batch_outs) != 0:
+                yield batch_outs
 
-        if self.infer_img is None:
+        if self.mode != 'test':
             return batch_iter_reader
         return sample_iter_reader
 
@@ -181,34 +206,27 @@ class SimpleReader(object):
         self.loss_type = params['loss_type']
         self.max_text_length = params['max_text_length']
         self.mode = params['mode']
-        self.infer_img = params['infer_img']
-        self.use_tps = False
-        if "tps" in params:
-            self.use_tps = True
+        self.num_heads = params['num_heads']
         if params['mode'] == 'train':
             self.batch_size = params['train_batch_size_per_card']
-            self.drop_last = True
-        else:
+        elif params['mode'] == 'eval':
             self.batch_size = params['test_batch_size_per_card']
-            self.drop_last = False
+        else:
+            self.batch_size = 1
+            self.infer_img = params['infer_img']
 
     def __call__(self, process_id):
         if self.mode != 'train':
             process_id = 0
 
         def sample_iter_reader():
-            if self.mode != 'train' and self.infer_img is not None:
+            if self.mode == 'test':
                 image_file_list = get_image_file_list(self.infer_img)
                 for single_img in image_file_list:
                     img = cv2.imread(single_img)
                     if img.shape[-1] == 1 or len(list(img.shape)) == 2:
                         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-                    norm_img = process_image(
-                        img=img,
-                        image_shape=self.image_shape,
-                        char_ops=self.char_ops,
-                        tps=self.use_tps,
-                        infer_mode=True)
+                    norm_img = process_image(img, self.image_shape)
                     yield norm_img
             else:
                 with open(self.label_file_path, "rb") as fin:
@@ -228,13 +246,19 @@ class SimpleReader(object):
                     if img is None:
                         logger.info("{} does not exist!".format(img_path))
                         continue
-                    if img.shape[-1] == 1 or len(list(img.shape)) == 2:
-                        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+                    #if img.shape[-1]==1 or len(list(img.shape))==2:
+                    #    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
                     label = substr[1]
-                    outs = process_image(img, self.image_shape, label,
-                                         self.char_ops, self.loss_type,
-                                         self.max_text_length)
+                    if self.loss_type == "srn":
+                        outs = process_image_srn(img, self.image_shape,
+                                                 self.num_heads,
+                                                 self.max_text_length, label,
+                                                 self.char_ops, self.loss_type)
+                    else:
+                        outs = process_image(img, self.image_shape, label,
+                                             self.char_ops, self.loss_type,
+                                             self.max_text_length)
                     if outs is None:
                         continue
                     yield outs
@@ -246,10 +270,9 @@ class SimpleReader(object):
                 if len(batch_outs) == self.batch_size:
                     yield batch_outs
                     batch_outs = []
-            if not self.drop_last:
-                if len(batch_outs) != 0:
-                    yield batch_outs
+            if len(batch_outs) != 0:
+                yield batch_outs
 
-        if self.infer_img is None:
+        if self.mode != 'test':
             return batch_iter_reader
         return sample_iter_reader

@@ -55,8 +55,8 @@ def main():
     program.check_gpu(use_gpu)
 
     alg = config['Global']['algorithm']
-    assert alg in ['EAST', 'DB', 'Rosetta', 'CRNN', 'STARNet', 'RARE']
-    if alg in ['Rosetta', 'CRNN', 'STARNet', 'RARE']:
+    assert alg in ['EAST', 'DB', 'Rosetta', 'CRNN', 'STARNet', 'RARE', 'SRN']
+    if alg in ['Rosetta', 'CRNN', 'STARNet', 'RARE', 'SRN']:
         config['Global']['char_ops'] = CharacterOps(config['Global'])
 
     place = fluid.CUDAPlace(0) if use_gpu else fluid.CPUPlace()
@@ -68,10 +68,11 @@ def main():
     train_fetch_name_list = train_build_outputs[1]
     train_fetch_varname_list = train_build_outputs[2]
     train_opt_loss_name = train_build_outputs[3]
+    model_average = train_build_outputs[4]
 
     eval_program = fluid.Program()
     eval_build_outputs = program.build(
-        config, eval_program, startup_program, mode='eval')
+        config, eval_program, startup_program, mode='test')
     eval_fetch_name_list = eval_build_outputs[1]
     eval_fetch_varname_list = eval_build_outputs[2]
     eval_program = eval_program.clone(for_test=True)
@@ -93,10 +94,10 @@ def main():
         'train_program':train_program,\
         'reader':train_loader,\
         'fetch_name_list':train_fetch_name_list,\
-        'fetch_varname_list':train_fetch_varname_list}
+        'fetch_varname_list':train_fetch_varname_list,\
+        'model_average': model_average}
 
     eval_info_dict = {'program':eval_program,\
-        'reader':eval_reader,\
         'fetch_name_list':eval_fetch_name_list,\
         'fetch_varname_list':eval_fetch_varname_list}
 

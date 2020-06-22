@@ -54,8 +54,8 @@ def main():
     program.check_gpu(use_gpu)
 
     alg = config['Global']['algorithm']
-    assert alg in ['EAST', 'DB', 'Rosetta', 'CRNN', 'STARNet', 'RARE']
-    if alg in ['Rosetta', 'CRNN', 'STARNet', 'RARE']:
+    assert alg in ['EAST', 'DB', 'Rosetta', 'CRNN', 'STARNet', 'RARE', 'SRN']
+    if alg in ['Rosetta', 'CRNN', 'STARNet', 'RARE', 'SRN']:
         config['Global']['char_ops'] = CharacterOps(config['Global'])
 
     place = fluid.CUDAPlace(0) if use_gpu else fluid.CPUPlace()
@@ -81,7 +81,7 @@ def main():
         print("Eval result", metrics)
     else:
         reader_type = config['Global']['reader_yml']
-        if "benchmark" not in reader_type:
+        if 0:  #"benchmark" not in reader_type:
             eval_reader = reader_main(config=config, mode="eval")
             eval_info_dict = {'program': eval_program, \
                               'reader': eval_reader, \
