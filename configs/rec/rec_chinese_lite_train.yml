@@ -15,7 +15,7 @@ Global:
   character_dict_path: ./ppocr/utils/ppocr_keys_v1.txt
   loss_type: ctc
   reader_yml: ./configs/rec/rec_chinese_reader.yml
-  pretrain_weights: 
+  pretrain_weights: ./output/rec_CRNN/best_accuracy
   checkpoints:
   save_inference_dir:
 Architecture:
@@ -37,6 +37,10 @@ Loss:
 
 Optimizer:
   function: ppocr.optimizer,AdamDecay
-  base_lr: 0.0005
+  base_lr: 0.001
   beta1: 0.9
   beta2: 0.999
+  decay:
+    function: cosine_decay
+    step_each_epoch: 20
+    total_epoch: 1000

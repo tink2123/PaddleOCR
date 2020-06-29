@@ -32,7 +32,7 @@ from eval_utils.eval_rec_utils import eval_rec_run
 from ppocr.utils.save_load import save_model
 import numpy as np
 from ppocr.utils.character import cal_predicts_accuracy
-
+import objgraph
 
 class ArgsParser(ArgumentParser):
     def __init__(self):
@@ -173,15 +173,16 @@ def build(config, main_prog, startup_prog, mode):
             if mode == "train":
                 opt_loss = outputs['total_loss']
                 opt_params = config['Optimizer']
-                optimizer, lr_decay = create_module(opt_params['function'])(opt_params)
+                #optimizer, lr_decay = create_module(opt_params['function'])(opt_params)
+                optimizer = create_module(opt_params['function'])(opt_params)
                 optimizer.minimize(opt_loss)
                 opt_loss_name = opt_loss.name
-                #global_lr = optimizer._global_learning_rate()
+                global_lr = optimizer._global_learning_rate()
                 #global_lr.persistable = True
-                lr_decay.persistable = True
+                #lr_decay.persistable = True
                 fetch_name_list.insert(0, "lr")
-                fetch_varname_list.insert(0,lr_decay.name)
-                #fetch_varname_list.insert(0, global_lr.name)
+                #fetch_varname_list.insert(0,lr_decay.name)
+                fetch_varname_list.insert(0, global_lr.name)
     return (dataloader, fetch_name_list, fetch_varname_list, opt_loss_name)
 
 
@@ -251,6 +252,7 @@ def train_eval_det_run(config, exe, train_info_dict, eval_info_dict):
                     logs = train_stats.log()
                     strs = 'epoch: {}, iter: {}, {}, time: {:.3f}'.format(
                         epoch, train_batch_id, logs, train_batch_elapse)
+                    logger.info("var dump:{}".format(objgraph.growth()))
                     logger.info(strs)
 
                 if train_batch_id > 0 and\

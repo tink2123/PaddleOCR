@@ -199,7 +199,7 @@ def get_warpR(config):
                          [0, 1., 0],
                          [0, 0, 1.]])
         ret = T1
-    return ret, (-r1, -c1), ratio
+    return ret, (-r1, -c1), ratio, dst
 
 
 def get_warpAffine(config):
@@ -280,6 +280,7 @@ class Config:
         self.h = h
         ra = random.random()
         self.perspective = True  # True if ra > 0.75  else False
+        self.crop = True
         self.affine = False  # True #if ra <= 0.5 else False
         self.reverse = True  # if random.random() >0.5 else False
         self.noise = True  # if random.random() >0.5 else False
@@ -352,6 +353,30 @@ def add_gasuss_noise(image, mean=0, var=0.1):
     out = np.uint8(out)
     return out
 
+def get_crop(image):
+    """
+    random crop
+
+    """
+    h,w,_ = image.shape
+    top_min = 10
+    top_max = 50
+    text_box_pnts = np.array([[0, 0],
+                              [w, 0],
+                              [w, h],
+                              [0, h]], np.float32)
+    scale = float(h) / float(w)
+    top_crop = int(random.randint(top_min, top_max) * scale)
+
+    crop_img = image.copy()
+
+    ratio = random.randint(0,1)
+    if ratio:
+        crop_img = crop_img[top_crop:h+top_crop, :, :]
+    else:
+        crop_img = crop_img[0:h-top_crop,:,:]
+
+    return crop_img
 
 # myConfig = config()
 def warp(img,ang):
@@ -365,13 +390,17 @@ def warp(img,ang):
     r1, c1 = 0, 0
     ratio = 1.0
     if config.perspective:
-        warpR, (r1, c1), ratio = get_warpR(config)
+        warpR, (r1, c1), ratio, dst = get_warpR(config)
         # config.d_x = c1
         # config.d_y = r1
         # config.shrink = ratio
-        new_img = cv2.warpPerspective(new_img, warpR, (w, h), borderMode=config.borderMode)
+        new_h = int(np.max(dst[:,1])) - int(np.min(dst[:, 1]))
+        new_w = int(np.max(dst[:,0])) - int(np.min(dst[:,0]))
+        new_img = cv2.warpPerspective(new_img, warpR, (int(new_w*ratio), h), borderMode=config.borderMode)
     # print(img.dtype,warpT.dtype,type(w),type(h))
     # img.astype('float32')
+    if config.crop:
+        new_img = get_crop(new_img)
     if config.affine:
         warpT = get_warpAffine(config)
         new_img = cv2.warpAffine(new_img, warpT, (w, h), borderMode=config.borderMode)

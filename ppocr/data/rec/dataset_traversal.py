@@ -114,6 +114,7 @@ class LMDBReader(object):
                 if process_id == 0:
                     self.print_lmdb_sets_info(lmdb_sets)
                 cur_index_sets = [1 + process_id] * len(lmdb_sets)
+                num = 0
                 while True:
                     finish_read_num = 0
                     for dataset_idx in range(len(lmdb_sets)):
@@ -127,21 +128,32 @@ class LMDBReader(object):
                             if sample_info is None:
                                 continue
                             img, label = sample_info
-                            angs = [10,45,75]
+                            origin_img = img.copy()
+                            #angs = [10,45,75]
+                            angs = [10]
+                            ang = random.choice(angs)
                             if self.distort:
+                                """
                                 if "MJ" in lmdb_sets[dataset_idx]['dirpath']:
                                     ratio = random.randint(0,4)
                                     if ratio > 2:
-                                        img = warp(img,random.choice(angs))
+                                        img = warp(img,ang)
                                 if "ST" in lmdb_sets[dataset_idx]['dirpath']:
                                     for char in label:
                                         if char.lower() not in string.printable[:36]:
                                             ratio = random.randint(0,1)
                                             if ratio:
                                                 img = warp(img,10)
+                                """
+                                ratio = random.randint(0,4)
+                                if ratio:
+                                    img = warp(img,10)
+                            distort_img  = np.concatenate((origin_img, img))
+                            cv2.imwrite(distort_img,'distort_img/distort_{}_ang{}'.format(num,angs))
                             outs = process_image(img, self.image_shape, label,
                                                  self.char_ops, self.loss_type,
                                                  self.max_text_length)
+                            num += 1
                             if outs is None:
                                 continue
                             yield outs
@@ -178,6 +190,7 @@ class SimpleReader(object):
         self.loss_type = params['loss_type']
         self.max_text_length = params['max_text_length']
         self.mode = params['mode']
+        self.distort = True
         if params['mode'] == 'train':
             self.batch_size = params['train_batch_size_per_card']
         elif params['mode'] == 'eval':
@@ -210,12 +223,19 @@ class SimpleReader(object):
                     substr = label_infor.decode('utf-8').strip("\n").split("\t")
                     img_path = self.img_set_dir + "/" + substr[0]
                     img = cv2.imread(img_path)
-                    if img.shape[-1]==1 or len(list(img.shape))==2:
-                        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
                     if img is None:
                         logger.info("{} does not exist!".format(img_path))
                         continue
+                    if img.shape[-1]==1 or len(list(img.shape))==2:
+                        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
                     label = substr[1]
+                    #origin_img = img.copy()
+                    if self.distort and self.mode=="train":
+                        ratio = random.randint(0,10)
+                        if ratio>7:
+                            img = warp(img,10)
+                    #distort_img  = np.concatenate((origin_img, img))
+                    #cv2.imwrite('distort_img/distort_{}_ang{}.jpg'.format(img_id,10),distort_img)
                     outs = process_image(img, self.image_shape, label,
                                          self.char_ops, self.loss_type,
                                          self.max_text_length)
