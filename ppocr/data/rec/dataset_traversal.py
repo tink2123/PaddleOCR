@@ -231,26 +231,23 @@ class SimpleReader(object):
                     label = substr[1]
                     #origin_img = img.copy()
                     pub_flag = True
-
+                    do_var=False
                     if self.mode=="train":
                         for data_name in ['seldom_img','hard_vertical_img'\
                                           'ver_seldom_img','hard_public_img'\
                                           'space_img_new']:
                             if data_name in img_path:
+                                do_var = True
                                 pub_flag = False
                     if not pub_flag:
                         idx = random.randint(1, 30)
                         if idx != 1:
                             continue
-                    if self.mode == "train" and self.distort:
-                        ratio = random.randint(0,10)
-                        if ratio>7:
-                            img = warp(img,10)
                     #distort_img  = np.concatenate((origin_img, img))
                     #cv2.imwrite('distort_img/distort_{}_ang{}.jpg'.format(img_id,10),distort_img)
                     outs = process_image(img, self.image_shape, label,
                                          self.char_ops, self.loss_type,
-                                         self.max_text_length)
+                                         self.max_text_length,do_var)
                     if outs is None:
                         continue
                     yield outs

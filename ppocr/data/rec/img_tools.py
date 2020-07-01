@@ -395,25 +395,31 @@ def warp(img,ang):
     # print(img.dtype,warpT.dtype,type(w),type(h))
     # img.astype('float32')
     if config.crop:
-        new_img = get_crop(new_img)
+        img_height, img_width = img.shape[0:2]
+        tp = random.randint(1, 100)
+        if tp >= 50 and img_height >= 20 and img_width >= 20:
+            new_img = get_crop(new_img)
     if config.affine:
         warpT = get_warpAffine(config)
         new_img = cv2.warpAffine(new_img, warpT, (w, h), borderMode=config.borderMode)
     if config.blur:
-        new_img = blur(new_img)
+        tp = random.randint(1, 100)
+        if tp >=50:
+            new_img = blur(new_img)
     if config.color:
-        try:
-            out_img = cvtColor(new_img)
-        except:
-            print(new_img)
-            cv2.imwrite("tmp.png",new_img)
-        new_img = out_img
+        tp = random.randint(1, 100)
+        if tp>=50:
+            new_img = cvtColor(new_img)
     if config.dou:
         new_img = doudong(new_img)
     if config.noise:
-        new_img = add_gasuss_noise(new_img)
+        tp = random.randint(1, 100)
+        if tp >=50:
+            new_img = add_gasuss_noise(new_img)
     if config.reverse:
-        new_img = 255 - new_img
+        tp = random.randint(1,100)
+        if tp>=50:
+            new_img = 255 - new_img
     return new_img
 
 def process_image(img,
@@ -421,7 +427,10 @@ def process_image(img,
                   label=None,
                   char_ops=None,
                   loss_type=None,
-                  max_text_length=None):
+                  max_text_length=None,
+                  do_var=False):
+    if do_var:
+        img = warp(img,10)
     norm_img = resize_norm_img(img, image_shape)
     norm_img = norm_img[np.newaxis, :]
     if label is not None:
