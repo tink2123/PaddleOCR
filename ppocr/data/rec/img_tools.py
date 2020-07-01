@@ -267,8 +267,8 @@ class Config:
         """
         make
         """
-        self.anglex = random.random() * 30 * flag()
-        self.angley = random.random() * 15 * flag()
+        self.anglex = random.random() * 5 * flag()
+        self.angley = random.random() * 5 * flag()
         self.anglez = -1 * random.random() * int(ang) * flag()  # 是旋转
         self.fov = 42
         self.r = 0
@@ -359,23 +359,17 @@ def get_crop(image):
 
     """
     h,w,_ = image.shape
-    top_min = 10
-    top_max = 50
-    text_box_pnts = np.array([[0, 0],
-                              [w, 0],
-                              [w, h],
-                              [0, h]], np.float32)
-    scale = float(h) / float(w)
-    top_crop = int(random.randint(top_min, top_max) * scale)
+    top_min = 1
+    top_max = 8
+    top_crop = int(random.randint(top_min, top_max))
 
     crop_img = image.copy()
 
     ratio = random.randint(0,1)
     if ratio:
-        crop_img = crop_img[top_crop:h+top_crop, :, :]
+        crop_img = crop_img[top_crop:h, :, :]
     else:
         crop_img = crop_img[0:h-top_crop,:,:]
-
     return crop_img
 
 # myConfig = config()
@@ -397,6 +391,7 @@ def warp(img,ang):
         new_h = int(np.max(dst[:,1])) - int(np.min(dst[:, 1]))
         new_w = int(np.max(dst[:,0])) - int(np.min(dst[:,0]))
         new_img = cv2.warpPerspective(new_img, warpR, (int(new_w*ratio), h), borderMode=config.borderMode)
+        new_img = cv2.resize(new_img,(w,h))
     # print(img.dtype,warpT.dtype,type(w),type(h))
     # img.astype('float32')
     if config.crop:
@@ -407,7 +402,12 @@ def warp(img,ang):
     if config.blur:
         new_img = blur(new_img)
     if config.color:
-        new_img = cvtColor(new_img)
+        try:
+            out_img = cvtColor(new_img)
+        except:
+            print(new_img)
+            cv2.imwrite("tmp.png",new_img)
+        new_img = out_img
     if config.dou:
         new_img = doudong(new_img)
     if config.noise:

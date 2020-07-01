@@ -148,8 +148,8 @@ class LMDBReader(object):
                                 ratio = random.randint(0,4)
                                 if ratio:
                                     img = warp(img,10)
-                            distort_img  = np.concatenate((origin_img, img))
-                            cv2.imwrite(distort_img,'distort_img/distort_{}_ang{}'.format(num,angs))
+                            #distort_img  = np.concatenate((origin_img, img))
+                            #cv2.imwrite(distort_img,'distort_img/distort_{}_ang{}'.format(num,angs))
                             outs = process_image(img, self.image_shape, label,
                                                  self.char_ops, self.loss_type,
                                                  self.max_text_length)
@@ -190,7 +190,7 @@ class SimpleReader(object):
         self.loss_type = params['loss_type']
         self.max_text_length = params['max_text_length']
         self.mode = params['mode']
-        self.distort = True
+        self.distort = False
         if params['mode'] == 'train':
             self.batch_size = params['train_batch_size_per_card']
         elif params['mode'] == 'eval':
@@ -230,7 +230,19 @@ class SimpleReader(object):
                         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
                     label = substr[1]
                     #origin_img = img.copy()
-                    if self.distort and self.mode=="train":
+                    pub_flag = True
+
+                    if self.mode=="train":
+                        for data_name in ['seldom_img','hard_vertical_img'\
+                                          'ver_seldom_img','hard_public_img'\
+                                          'space_img_new']:
+                            if data_name in img_path:
+                                pub_flag = False
+                    if not pub_flag:
+                        idx = random.randint(1, 30)
+                        if idx != 1:
+                            continue
+                    if self.mode == "train" and self.distort:
                         ratio = random.randint(0,10)
                         if ratio>7:
                             img = warp(img,10)
