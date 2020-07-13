@@ -15,8 +15,6 @@
 import math
 import cv2
 import numpy as np
-from ppocr.utils.utility import initial_logger
-logger = initial_logger()
 
 
 def get_bounding_box_rect(pos):
@@ -50,30 +48,33 @@ def resize_norm_img(img, image_shape):
     return padding_im
 
 
-def resize_norm_img_chinese(img, image_shape):
+def resize_norm_img_srn(img, image_shape):
     imgC, imgH, imgW = image_shape
-    # todo: change to 0 and modified image shape
-    max_wh_ratio = 0
-    h, w = img.shape[0], img.shape[1]
-    ratio = w * 1.0 / h
-    max_wh_ratio = max(max_wh_ratio, ratio)
-    imgW = int(32 * max_wh_ratio)
-    if math.ceil(imgH * ratio) > imgW:
-        resized_w = imgW
+
+    img_black = np.zeros((imgH, imgW))
+    im_hei = img.shape[0]
+    im_wid = img.shape[1]
+
+    if im_wid <= im_hei * 1:
+        img_new = cv2.resize(img, (imgH * 1, imgH))
+    elif im_wid <= im_hei * 2:
+        img_new = cv2.resize(img, (imgH * 2, imgH))
+    elif im_wid <= im_hei * 3:
+        img_new = cv2.resize(img, (imgH * 3, imgH))
     else:
-        resized_w = int(math.ceil(imgH * ratio))
-    resized_image = cv2.resize(img, (resized_w, imgH))
-    resized_image = resized_image.astype('float32')
-    if image_shape[0] == 1:
-        resized_image = resized_image / 255
-        resized_image = resized_image[np.newaxis, :]
-    else:
-        resized_image = resized_image.transpose((2, 0, 1)) / 255
-    resized_image -= 0.5
-    resized_image /= 0.5
-    padding_im = np.zeros((imgC, imgH, imgW), dtype=np.float32)
-    padding_im[:, :, 0:resized_w] = resized_image
-    return padding_im
+        img_new = cv2.resize(img, (imgW, imgH))
+    #img_new = cv2.resize(img, (imgW, imgH))
+
+    #img_new = cv2.resize(img_new,self.train_imgshape[1:]) #reshape the size
+    img_np = np.asarray(img_new)
+    img_np = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY)
+    img_black[:, 0:img_np.shape[1]] = img_np
+    img_black = img_black[:, :, np.newaxis]
+
+    row, col, c = img_black.shape
+    c = 1
+
+    return np.reshape(img_black, (c, row, col)).astype(np.float32)
 
 
 def get_img_data(value):
@@ -94,24 +95,13 @@ def process_image(img,
                   label=None,
                   char_ops=None,
                   loss_type=None,
-                  max_text_length=None,
-                  tps=None,
-                  infer_mode=False):
-    if infer_mode and char_ops.character_type == "ch" and not tps:
-        norm_img = resize_norm_img_chinese(img, image_shape)
-    else:
-        norm_img = resize_norm_img(img, image_shape)
-
+                  max_text_length=None):
+    norm_img = resize_norm_img(img, image_shape)
     norm_img = norm_img[np.newaxis, :]
     if label is not None:
-        # char_num = char_ops.get_char_num()
+        char_num = char_ops.get_char_num()
         text = char_ops.encode(label)
         if len(text) == 0 or len(text) > max_text_length:
-            logger.info(
-                "Warning in ppocr/data/rec/img_tools.py:line106: Wrong data type."
-                "Excepted string with length between 1 and {}, but "
-                "got '{}'. Label is '{}'".format(max_text_length,
-                                                 len(text), label))
             return None
         else:
             if loss_type == "ctc":
@@ -125,7 +115,79 @@ def process_image(img,
                 beg_text = beg_text.reshape(-1, 1)
                 end_text = end_text.reshape(-1, 1)
                 return (norm_img, beg_text, end_text)
+            ##elif loss_type == "srn":
+            ##    text_padded = text + [[0]* (max_text_length - len(text)) for x in text]
+            ##    text = text_padded.reshape(-1, 1)
+            ##    return (norm_img, text)
             else:
                 assert False, "Unsupport loss_type %s in process_image"\
                     % loss_type
     return (norm_img)
+
+
+def srn_other_inputs(image_shape, num_heads, max_text_length):
+
+    imgC, imgH, imgW = image_shape
+    feature_dim = int((imgH / 8) * (imgW / 8))
+
+    encoder_word_pos = np.array(range(0, feature_dim)).reshape(
+        (feature_dim, 1)).astype('int64')
+    gsrm_word_pos = np.array(range(0, max_text_length)).reshape(
+        (max_text_length, 1)).astype('int64')
+
+    gsrm_attn_bias_data = np.ones((1, max_text_length, max_text_length))
+    gsrm_slf_attn_bias1 = np.triu(gsrm_attn_bias_data, 1).reshape(
+        [-1, 1, max_text_length, max_text_length])
+    gsrm_slf_attn_bias1 = np.tile(gsrm_slf_attn_bias1,
+                                  [1, num_heads, 1, 1]) * [-1e9]
+
+    gsrm_slf_attn_bias2 = np.tril(gsrm_attn_bias_data, -1).reshape(
+        [-1, 1, max_text_length, max_text_length])
+    gsrm_slf_attn_bias2 = np.tile(gsrm_slf_attn_bias2,
+                                  [1, num_heads, 1, 1]) * [-1e9]
+
+    encoder_word_pos = encoder_word_pos[np.newaxis, :]
+    gsrm_word_pos = gsrm_word_pos[np.newaxis, :]
+    #print (gsrm_slf_attn_bias1.shape)
+    #print (gsrm_slf_attn_bias2.shape)
+    #gsrm_slf_attn_bias1 = gsrm_slf_attn_bias1[np.newaxis, :]
+    #gsrm_slf_attn_bias2 = gsrm_slf_attn_bias2[np.newaxis, :]
+
+    return [
+        encoder_word_pos, gsrm_word_pos, gsrm_slf_attn_bias1,
+        gsrm_slf_attn_bias2
+    ]
+
+
+def process_image_srn(img,
+                      image_shape,
+                      num_heads,
+                      max_text_length,
+                      label=None,
+                      char_ops=None,
+                      loss_type=None):
+    norm_img = resize_norm_img_srn(img, image_shape)
+    norm_img = norm_img[np.newaxis, :]
+    [encoder_word_pos, gsrm_word_pos, gsrm_slf_attn_bias1, gsrm_slf_attn_bias2] = \
+        srn_other_inputs(image_shape, num_heads, max_text_length)
+
+    if label is not None:
+        char_num = char_ops.get_char_num()
+        text = char_ops.encode(label)
+        if len(text) == 0 or len(text) > max_text_length:
+            return None
+        else:
+            if loss_type == "srn":
+                #print (text)
+                text_padded = [0] * max_text_length
+                for i in range(len(text)):
+                    text_padded[i] = text[i]
+                text_padded = np.array(text_padded)
+                text = text_padded.reshape(-1, 1)
+                return (norm_img, text, encoder_word_pos, gsrm_word_pos,
+                        gsrm_slf_attn_bias1, gsrm_slf_attn_bias2)
+            else:
+                assert False, "Unsupport loss_type %s in process_image"\
+                    % loss_type
+    return (norm_img, encoder_word_pos, gsrm_word_pos, gsrm_slf_attn_bias1,
+            gsrm_slf_attn_bias2)

@@ -41,6 +41,7 @@ class AttentionPredict(object):
                                        size=decoder_size,
                                        bias_attr=False,
                                        name="decoder_state_proj_fc")
+
         decoder_state_expand = layers.sequence_expand(
             x=decoder_state_proj, y=encoder_proj)
         concated = layers.elementwise_add(encoder_proj, decoder_state_expand)
@@ -52,6 +53,8 @@ class AttentionPredict(object):
                                       name="attention_weights_fc")
         attention_weights = layers.sequence_softmax(input=attention_weights)
         weigths_reshape = layers.reshape(x=attention_weights, shape=[-1])
+        print("x:", weigths_reshape)
+        print("y:", encoder_vec)
         scaled = layers.elementwise_mul(
             x=encoder_vec, y=weigths_reshape, axis=0)
         context = layers.sequence_pool(input=scaled, pool_type='sum')
@@ -175,7 +178,7 @@ class AttentionPredict(object):
 
             new_scores = fluid.layers.concat([full_scores, topk_scores], axis=1)
             fluid.layers.assign(new_scores, full_scores)
-            
+
             layers.increment(x=counter, value=1, in_place=True)
 
             # update the memories
@@ -228,10 +231,10 @@ class AttentionPredict(object):
                 decoder_size, char_num)
             _, decoded_out = layers.topk(input=predict, k=1)
             decoded_out = layers.lod_reset(decoded_out, y=label_out)
-            predicts = {'predict':predict, 'decoded_out':decoded_out}
+            predicts = {'predict': predict, 'decoded_out': decoded_out}
         else:
             ids, predict = self.gru_attention_infer(
                 decoder_boot, self.max_length, char_num, word_vector_dim,
                 encoded_vector, encoded_proj, decoder_size)
-            predicts = {'predict':predict, 'decoded_out':ids}
+            predicts = {'predict': predict, 'decoded_out': ids}
         return predicts

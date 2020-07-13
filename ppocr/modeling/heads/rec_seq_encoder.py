@@ -19,6 +19,7 @@ from __future__ import print_function
 import math
 import paddle.fluid as fluid
 import paddle.fluid.layers as layers
+import cv2
 
 
 class EncoderWithReshape(object):
@@ -31,6 +32,7 @@ class EncoderWithReshape(object):
             stride=[1, 1],
             filter_size=[inputs.shape[2], 1],
             name="sliced_feature")
+        print(sliced_feature)
         return sliced_feature
 
 

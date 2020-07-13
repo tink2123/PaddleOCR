@@ -28,10 +28,11 @@ import paddle.fluid as fluid
 import time
 from ppocr.utils.stats import TrainingStats
 from eval_utils.eval_det_utils import eval_det_run
-from eval_utils.eval_rec_utils import eval_rec_run
+from eval_utils.eval_rec_utils import eval_rec_run, test_rec_benchmark
 from ppocr.utils.save_load import save_model
 import numpy as np
-from ppocr.utils.character import cal_predicts_accuracy
+from ppocr.utils.character import cal_predicts_accuracy, cal_predicts_accuracy_srn
+import cv2
 
 
 class ArgsParser(ArgumentParser):
@@ -114,10 +115,7 @@ def merge_config(config):
                 global_config[key] = value
         else:
             sub_keys = key.split('.')
-            assert (
-                sub_keys[0] in global_config
-            ), "the sub_keys can only be one of global_config: {}, but get: {}, please check your running command".format(
-                global_config.keys(), sub_keys[0])
+            assert (sub_keys[0] in global_config)
             cur = global_config[sub_keys[0]]
             for idx, sub_key in enumerate(sub_keys[1:]):
                 assert (sub_key in cur)
@@ -173,6 +171,7 @@ def build(config, main_prog, startup_prog, mode):
             fetch_name_list = list(outputs.keys())
             fetch_varname_list = [outputs[v].name for v in fetch_name_list]
             opt_loss_name = None
+            model_average = None
             if mode == "train":
                 opt_loss = outputs['total_loss']
                 opt_params = config['Optimizer']
@@ -180,9 +179,20 @@ def build(config, main_prog, startup_prog, mode):
                 optimizer.minimize(opt_loss)
                 opt_loss_name = opt_loss.name
                 global_lr = optimizer._global_learning_rate()
+                global_lr.persistable = True
                 fetch_name_list.insert(0, "lr")
                 fetch_varname_list.insert(0, global_lr.name)
-    return (dataloader, fetch_name_list, fetch_varname_list, opt_loss_name)
+
+                if 'average_window' in config['Global']:
+                    model_average = fluid.optimizer.ModelAverage(
+                        config['Global']['average_window'],
+                        min_average_window=config['Global'][
+                            'min_average_window'],
+                        max_average_window=config['Global'][
+                            'max_average_window'])
+
+    return (dataloader, fetch_name_list, fetch_varname_list, opt_loss_name,
+            model_average)
 
 
 def build_export(config, main_prog, startup_prog):
@@ -229,6 +239,7 @@ def train_eval_det_run(config, exe, train_info_dict, eval_info_dict):
     best_batch_id = 0
     best_epoch = 0
     train_loader = train_info_dict['reader']
+
     for epoch in range(epoch_num):
         train_loader.start()
         try:
@@ -239,7 +250,7 @@ def train_eval_det_run(config, exe, train_info_dict, eval_info_dict):
                     fetch_list=train_info_dict['fetch_varname_list'],
                     return_numpy=False)
                 stats = {}
-                for tno in range(len(train_outs)):
+                for tno in range(len(train_outs) - 1):
                     fetch_name = train_info_dict['fetch_name_list'][tno]
                     fetch_value = np.mean(np.array(train_outs[tno]))
                     stats[fetch_name] = fetch_value
@@ -309,17 +320,24 @@ def train_eval_rec_run(config, exe, train_info_dict, eval_info_dict):
                         range(len(train_outs))))
 
                 loss = np.mean(np.array(train_outs[fetch_map['total_loss']]))
+                #print ("all lr: ", np.array(train_outs[fetch_map['lr']]))
                 lr = np.mean(np.array(train_outs[fetch_map['lr']]))
                 preds_idx = fetch_map['decoded_out']
                 preds = np.array(train_outs[preds_idx])
-                preds_lod = train_outs[preds_idx].lod()[0]
                 labels_idx = fetch_map['label']
                 labels = np.array(train_outs[labels_idx])
-                labels_lod = train_outs[labels_idx].lod()[0]
 
-                acc, acc_num, img_num = cal_predicts_accuracy(
-                    config['Global']['char_ops'], preds, preds_lod, labels,
-                    labels_lod)
+                if config['Global']['loss_type'] != "srn":
+                    preds_lod = train_outs[preds_idx].lod()[0]
+                    labels_lod = train_outs[labels_idx].lod()[0]
+                    acc, acc_num, img_num = cal_predicts_accuracy(
+                        config['Global']['char_ops'], preds, preds_lod, labels,
+                        labels_lod)
+                else:
+                    acc, acc_num, img_num = cal_predicts_accuracy_srn(
+                        config['Global']['char_ops'], preds, labels,
+                        config['Global']['max_text_length'])
+
                 t2 = time.time()
                 train_batch_elapse = t2 - t1
                 stats = {'loss': loss, 'acc': acc}
@@ -331,22 +349,55 @@ def train_eval_rec_run(config, exe, train_info_dict, eval_info_dict):
                         epoch, train_batch_id, lr, logs, train_batch_elapse)
                     logger.info(strs)
 
-                if train_batch_id > 0 and\
+#if train_batch_id % config['Global']['model_average_period'] == 0:  #can be set in params
+
+#if train_batch_id > 0 and\
+                if train_batch_id > 0 and \
                     train_batch_id % eval_batch_step == 0:
-                    metrics = eval_rec_run(exe, config, eval_info_dict, "eval")
-                    eval_acc = metrics['avg_acc']
-                    eval_sample_num = metrics['total_sample_num']
-                    if eval_acc > best_eval_acc:
-                        best_eval_acc = eval_acc
-                        best_batch_id = train_batch_id
-                        best_epoch = epoch
-                        save_path = save_model_dir + "/best_accuracy"
+                    ##metrics = eval_rec_run(exe, config, eval_info_dict, "eval")
+
+                    model_average = train_info_dict['model_average']
+                    #if model_average:
+                    with model_average.apply(exe):
+                        print("save maybe model")
+                        save_path = save_model_dir + "/iter_epoch_%d_%d" % (
+                            epoch, train_batch_id)
                         save_model(train_info_dict['train_program'], save_path)
+
+                    with model_average.apply(exe):
+                        metrics = test_rec_benchmark(exe, config,
+                                                     eval_info_dict)
+                        eval_acc = metrics['avg_acc']
+                        eval_sample_num = metrics['total_sample_num']
+                        if eval_acc > best_eval_acc:
+                            best_eval_acc = eval_acc
+                            best_batch_id = train_batch_id
+                            best_epoch = epoch
+
+                    #eval_acc = metrics['avg_acc']
+                    #eval_sample_num = metrics['total_sample_num']
+                    #if eval_acc > best_eval_acc:
+                    #    best_eval_acc = eval_acc
+                    #    best_batch_id = train_batch_id
+                    #    best_epoch = epoch
+                    #    save_path = save_model_dir + "/best_accuracy"
+                    #    save_model(train_info_dict['train_program'], save_path)
+                    #elif eval_acc > best_eval_acc - 0.01: 
+                    #    print ("save maybe model")   
+                    #    save_path = save_model_dir + "/iter_epoch_%d_%d" % (epoch, train_batch_id)
+                    #    save_model(train_info_dict['train_program'], save_path)
+
                     strs = 'Test iter: {}, acc:{:.6f}, best_acc:{:.6f}, best_epoch:{}, best_batch_id:{}, eval_sample_num:{}'.format(
                         train_batch_id, eval_acc, best_eval_acc, best_epoch,
                         best_batch_id, eval_sample_num)
                     logger.info(strs)
+
                 train_batch_id += 1
+
+                #if train_batch_id == 1 and epoch == 0:
+                #    print ("save init model")
+                #    save_path = save_model_dir + "/init"
+                #    save_model(train_info_dict['train_program'], save_path)
 
         except fluid.core.EOFException:
             train_loader.reset()
