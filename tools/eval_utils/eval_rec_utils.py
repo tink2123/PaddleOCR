@@ -29,7 +29,7 @@ FORMAT = '%(asctime)s-%(levelname)s: %(message)s'
 logging.basicConfig(level=logging.INFO, format=FORMAT)
 logger = logging.getLogger(__name__)
 
-from ppocr.utils.character import cal_predicts_accuracy
+from ppocr.utils.character import cal_predicts_accuracy, cal_predicts_accuracy_srn
 from ppocr.utils.character import convert_rec_label_to_lod
 from ppocr.utils.character import convert_rec_attention_infer_res
 from ppocr.utils.utility import create_module
@@ -48,7 +48,7 @@ def eval_rec_run(exe, config, eval_info_dict, mode):
     total_sample_num = 0
     total_acc_num = 0
     total_batch_num = 0
-    if mode == "eval":
+    if mode == "test":
         is_remove_duplicate = False
     else:
         is_remove_duplicate = True
@@ -60,22 +60,58 @@ def eval_rec_run(exe, config, eval_info_dict, mode):
         for ino in range(img_num):
             img_list.append(data[ino][0])
             label_list.append(data[ino][1])
-        img_list = np.concatenate(img_list, axis=0)
-        outs = exe.run(eval_info_dict['program'], \
+        acc = 0
+        acc_num = 0
+        sample_num = 0
+
+        if config['Global']['loss_type'] != "srn": 
+            img_list = np.concatenate(img_list, axis=0)
+            outs = exe.run(eval_info_dict['program'], \
                        feed={'image': img_list}, \
                        fetch_list=eval_info_dict['fetch_varname_list'], \
                        return_numpy=False)
-        preds = np.array(outs[0])
-        if preds.shape[1] != 1:
-            preds, preds_lod = convert_rec_attention_infer_res(preds)
+            preds = np.array(outs[0])
+
+            if preds.shape[1] != 1:
+                preds, preds_lod = convert_rec_attention_infer_res(preds)
+            else:
+                preds_lod = outs[0].lod()[0]
+            labels, labels_lod = convert_rec_label_to_lod(label_list)
+            acc, acc_num, sample_num = cal_predicts_accuracy(
+                char_ops, preds, preds_lod, labels, labels_lod, is_remove_duplicate)
         else:
-            preds_lod = outs[0].lod()[0]
-        labels, labels_lod = convert_rec_label_to_lod(label_list)
-        acc, acc_num, sample_num = cal_predicts_accuracy(
-            char_ops, preds, preds_lod, labels, labels_lod, is_remove_duplicate)
+            encoder_word_pos_list = []
+            gsrm_word_pos_list = []
+            gsrm_slf_attn_bias1_list = []
+            gsrm_slf_attn_bias2_list = []
+            for ino in range(img_num):
+                encoder_word_pos_list.append(data[ino][2])
+                gsrm_word_pos_list.append(data[ino][3])
+                gsrm_slf_attn_bias1_list.append(data[ino][4])
+                gsrm_slf_attn_bias2_list.append(data[ino][5])
+
+            img_list = np.concatenate(img_list, axis=0)
+            label_list = np.concatenate(label_list, axis=0)
+            encoder_word_pos_list = np.concatenate(encoder_word_pos_list, axis=0).astype(np.int64)
+            gsrm_word_pos_list = np.concatenate(gsrm_word_pos_list, axis=0).astype(np.int64)
+            gsrm_slf_attn_bias1_list = np.concatenate(gsrm_slf_attn_bias1_list, axis=0).astype(np.float32)
+            gsrm_slf_attn_bias2_list = np.concatenate(gsrm_slf_attn_bias2_list, axis=0).astype(np.float32)
+
+            #print (img_list.shape, label_list.shape, encoder_word_pos_list.shape, gsrm_word_pos_list.shape, gsrm_slf_attn_bias1_list.shape, gsrm_slf_attn_bias2_list.shape)
+            labels = label_list           
+
+            outs = exe.run(eval_info_dict['program'], \
+                       feed={'image': img_list, 'encoder_word_pos': encoder_word_pos_list, 
+                             'gsrm_word_pos': gsrm_word_pos_list, 'gsrm_slf_attn_bias1': gsrm_slf_attn_bias1_list,
+                             'gsrm_slf_attn_bias2': gsrm_slf_attn_bias2_list}, \
+                       fetch_list=eval_info_dict['fetch_varname_list'], \
+                       return_numpy=False)
+            preds = np.array(outs[0])
+            acc, acc_num, sample_num = cal_predicts_accuracy_srn(
+                char_ops, preds, labels, config['Global']['max_text_length'])
+
         total_acc_num += acc_num
         total_sample_num += sample_num
-        logger.info("eval batch id: {}, acc: {}".format(total_batch_num, acc))
         total_batch_num += 1
     avg_acc = total_acc_num * 1.0 / total_sample_num
     metrics = {'avg_acc': avg_acc, "total_acc_num": total_acc_num, \
@@ -84,19 +120,23 @@ def eval_rec_run(exe, config, eval_info_dict, mode):
 
 
 def test_rec_benchmark(exe, config, eval_info_dict):
-    " Evaluate lmdb dataset "
-    eval_data_list = ['IIIT5k_3000', 'SVT', 'IC03_860', 'IC03_867', \
-                      'IC13_857', 'IC13_1015', 'IC15_1811', 'IC15_2077', 'SVTP', 'CUTE80']
+    " 评估lmdb 数据"
+    eval_data_list = ['IIIT5k_3000', 'SVT', 'IC03_860',  \
+                      'IC13_857', 'IC15_1811', 'SVTP', 'CUTE80']
+    #eval_data_list = ['IIIT5k_3000', 'SVT', \
+    #                  'IC13_857', 'IC15_1811', 'SVTP', 'CUTE80']
+    #eval_data_list = ['IC13_857', 'IC15_1811', 'SVTP', 'CUTE80_deli']
+    #eval_data_list = ['IC13_857']
     eval_data_dir = config['TestReader']['lmdb_sets_dir']
     total_evaluation_data_number = 0
     total_correct_number = 0
     eval_data_acc_info = {}
     for eval_data in eval_data_list:
-        config['TestReader']['lmdb_sets_dir'] = \
+        config['EvalReader']['lmdb_sets_dir'] = \
             eval_data_dir + "/" + eval_data
-        eval_reader = reader_main(config=config, mode="test")
+        eval_reader = reader_main(config=config, mode="eval")
         eval_info_dict['reader'] = eval_reader
-        metrics = eval_rec_run(exe, config, eval_info_dict, "test")
+        metrics = eval_rec_run(exe, config, eval_info_dict, "eval")
         total_evaluation_data_number += metrics['total_sample_num']
         total_correct_number += metrics['total_acc_num']
         eval_data_acc_info[eval_data] = metrics
@@ -110,3 +150,8 @@ def test_rec_benchmark(exe, config, eval_info_dict):
     strs += "\n average, accuracy:{:.6f}".format(avg_acc)
     logger.info(strs)
     logger.info('-' * 50)
+
+    metrics = {"avg_acc": avg_acc, "total_acc_num": total_correct_number,
+                "total_sample_num": total_evaluation_data_number}
+    return metrics
+

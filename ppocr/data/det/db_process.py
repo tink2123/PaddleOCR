@@ -17,8 +17,6 @@ import cv2
 import numpy as np
 import json
 import sys
-from ppocr.utils.utility import initial_logger, check_and_read_gif
-logger = initial_logger()
 
 from .data_augment import AugmentData
 from .random_crop_data import RandomCropData
@@ -100,14 +98,9 @@ class DBProcessTrain(object):
 
     def __call__(self, label_infor):
         img_path, gt_label = self.convert_label_infor(label_infor)
-        imgvalue, flag = check_and_read_gif(img_path)
-        if not flag:
-            imgvalue = cv2.imread(img_path)
+        imgvalue = cv2.imread(img_path)
         if imgvalue is None:
-            logger.info("{} does not exist!".format(img_path))
             return None
-        if len(list(imgvalue.shape)) == 2 or imgvalue.shape[2] == 1:
-            imgvalue = cv2.cvtColor(imgvalue, cv2.COLOR_GRAY2BGR)
         data = self.make_data_dict(imgvalue, gt_label)
         data = AugmentData(data)
         data = RandomCropData(data, self.image_shape[1:])
@@ -127,8 +120,8 @@ class DBProcessTest(object):
     def __init__(self, params):
         super(DBProcessTest, self).__init__()
         self.resize_type = 0
-        if 'test_image_shape' in params:
-            self.image_shape = params['test_image_shape']
+        if 'det_image_shape' in params:
+            self.image_shape = params['det_image_shape']
             # print(self.image_shape)
             self.resize_type = 1
         if 'max_side_len' in params:
@@ -196,12 +189,8 @@ class DBProcessTest(object):
         img_std = [0.229, 0.224, 0.225]
         im = im.astype(np.float32, copy=False)
         im = im / 255
-        im[:, :, 0] -= img_mean[0]
-        im[:, :, 1] -= img_mean[1]
-        im[:, :, 2] -= img_mean[2]
-        im[:, :, 0] /= img_std[0]
-        im[:, :, 1] /= img_std[1]
-        im[:, :, 2] /= img_std[2]
+        im -= img_mean
+        im /= img_std
         channel_swap = (2, 0, 1)
         im = im.transpose(channel_swap)
         return im

@@ -25,22 +25,18 @@ class CharacterOps(object):
     def __init__(self, config):
         self.character_type = config['character_type']
         self.loss_type = config['loss_type']
+        self.max_text_len = config['max_text_length']
         if self.character_type == "en":
             self.character_str = "0123456789abcdefghijklmnopqrstuvwxyz"
             dict_character = list(self.character_str)
         elif self.character_type == "ch":
             character_dict_path = config['character_dict_path']
-            add_space = False
-            if 'use_space_char' in config:
-                add_space = config['use_space_char']
             self.character_str = ""
             with open(character_dict_path, "rb") as fin:
                 lines = fin.readlines()
                 for line in lines:
                     line = line.decode('utf-8').strip("\n").strip("\r\n")
                     self.character_str += line
-            if add_space:
-                self.character_str += " "
             dict_character = list(self.character_str)
         elif self.character_type == "en_sensitive":
             # same with ASTER setting (use 94 char).
@@ -54,6 +50,9 @@ class CharacterOps(object):
         self.end_str = "eos"
         if self.loss_type == "attention":
             dict_character = [self.beg_str, self.end_str] + dict_character
+        elif self.loss_type == "srn":
+            #dict_character = [self.end_str] + dict_character
+            dict_character = dict_character + [self.beg_str, self.end_str]
         self.dict = {}
         for i, char in enumerate(dict_character):
             self.dict[char] = i
@@ -98,7 +97,7 @@ class CharacterOps(object):
             if is_remove_duplicate:
                 if idx > 0 and text_index[idx - 1] == text_index[idx]:
                     continue
-            char_list.append(self.character[int(text_index[idx])])
+            char_list.append(self.character[text_index[idx]])
         text = ''.join(char_list)
         return text
 
@@ -143,6 +142,50 @@ def cal_predicts_accuracy(char_ops,
 
         if preds_text == labels_text:
             acc_num += 1
+    acc = acc_num * 1.0 / img_num
+    return acc, acc_num, img_num
+
+def cal_predicts_accuracy_srn(char_ops,
+                          preds,
+                          labels,
+                          max_text_len,
+                          is_debug=False):
+    acc_num = 0
+    img_num = 0
+    #print ("preds-shape: ", preds.shape)
+    #print ("labels-shape: ", labels.shape)    
+
+    total_len = preds.shape[0]
+    img_num = int(total_len / max_text_len)
+    #print (img_num)
+    for i in range(img_num):
+        cur_label = []
+        cur_pred = []
+        for j in range(max_text_len):
+            if labels[j + i * max_text_len] != 37: #0
+                cur_label.append(labels[j + i * max_text_len][0])
+            else:
+                break
+
+        if is_debug:
+            for j in range(max_text_len):
+                if preds[j + i * max_text_len] != 37: #0
+                    cur_pred.append(preds[j + i * max_text_len][0])
+                else:
+                    break
+            print ("cur_label: ", cur_label)
+            print ("cur_pred: ", cur_pred)
+
+
+        for j in range(max_text_len + 1):
+            if j < len(cur_label) and preds[j + i * max_text_len][0] != cur_label[j]:
+                break
+            elif j == len(cur_label) and j == max_text_len:
+                acc_num += 1
+                break
+            elif j == len(cur_label) and preds[j + i * max_text_len][0] == 37:
+                acc_num += 1
+                break
     acc = acc_num * 1.0 / img_num
     return acc, acc_num, img_num
 

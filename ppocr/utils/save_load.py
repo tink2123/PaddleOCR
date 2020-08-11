@@ -21,6 +21,7 @@ import os
 import shutil
 import tempfile
 
+import paddle
 import paddle.fluid as fluid
 
 from .utility import initial_logger
@@ -109,20 +110,17 @@ def init_model(config, program, exe):
     """
     checkpoints = config['Global'].get('checkpoints')
     if checkpoints:
-        if os.path.exists(checkpoints + '.pdparams'):
-            path = checkpoints
-            fluid.load(program, path, exe)
-            logger.info("Finish initing model from {}".format(path))
-        else:
-            raise ValueError(
-                "Model checkpoints {} does not exists,"
-                "check if you lost the file prefix.".format(checkpoints + '.pdparams'))
+        path = checkpoints
+        fluid.load(program, path, exe)
+        logger.info("Finish initing model from {}".format(path))
+        return
 
     pretrain_weights = config['Global'].get('pretrain_weights')
     if pretrain_weights:
         path = pretrain_weights
         load_params(exe, program, path)
         logger.info("Finish initing model from {}".format(path))
+    return
 
 
 def save_model(program, model_path):
