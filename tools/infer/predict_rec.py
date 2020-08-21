@@ -43,33 +43,90 @@ class TextRecognizer(object):
             "use_space_char": args.use_space_char,
             "max_text_length": args.max_text_length
         }
-        if self.rec_algorithm != "RARE":
+        if self.rec_algorithm == "CRNN":
             char_ops_params['loss_type'] = 'ctc'
             self.loss_type = 'ctc'
-        else:
+        if self.rec_algorithm == "RARE":
             char_ops_params['loss_type'] = 'attention'
             self.loss_type = 'attention'
+        if self.rec_algorithm == "SRN":
+            char_ops_params['loss_type'] = 'srn'
+            self.loss_type = "srn"
         self.char_ops = CharacterOps(char_ops_params)
 
     def resize_norm_img(self, img, max_wh_ratio):
         imgC, imgH, imgW = self.rec_image_shape
-        assert imgC == img.shape[2]
-        if self.character_type == "ch":
-            imgW = int((32 * max_wh_ratio))
-        h, w = img.shape[:2]
-        ratio = w / float(h)
-        if math.ceil(imgH * ratio) > imgW:
-            resized_w = imgW
+        if self.loss_type != 'srn':
+            assert imgC == img.shape[2]
+            if self.character_type == "ch":
+                imgW = int((32 * max_wh_ratio))
+            h, w = img.shape[:2]
+            ratio = w / float(h)
+            if math.ceil(imgH * ratio) > imgW:
+                resized_w = imgW
+            else:
+                resized_w = int(math.ceil(imgH * ratio))
+            resized_image = cv2.resize(img, (resized_w, imgH))
+            resized_image = resized_image.astype('float32')
+            resized_image = resized_image.transpose((2, 0, 1)) / 255
+            resized_image -= 0.5
+            resized_image /= 0.5
+            padding_im = np.zeros((imgC, imgH, imgW), dtype=np.float32)
+            padding_im[:, :, 0:resized_w] = resized_image
+            return padding_im
         else:
-            resized_w = int(math.ceil(imgH * ratio))
-        resized_image = cv2.resize(img, (resized_w, imgH))
-        resized_image = resized_image.astype('float32')
-        resized_image = resized_image.transpose((2, 0, 1)) / 255
-        resized_image -= 0.5
-        resized_image /= 0.5
-        padding_im = np.zeros((imgC, imgH, imgW), dtype=np.float32)
-        padding_im[:, :, 0:resized_w] = resized_image
-        return padding_im
+            img_black = np.zeros((imgH, imgW))
+            im_hei = img.shape[0]
+            im_wid = img.shape[1]
+
+            if im_wid <= im_hei * 1:
+                img_new = cv2.resize(img, (imgH * 1, imgH))
+            elif im_wid <= im_hei * 2:
+                img_new = cv2.resize(img, (imgH * 2, imgH))
+            elif im_wid <= im_hei * 3:
+                img_new = cv2.resize(img, (imgH * 3, imgH))
+            else:
+                img_new = cv2.resize(img, (imgW, imgH))
+
+            img_np = np.asarray(img_new)
+            img_np = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY)
+            img_black[:, 0:img_np.shape[1]] = img_np
+            img_black = img_black[:, :, np.newaxis]
+
+            row, col, c = img_black.shape
+            c = 1
+
+            return np.reshape(img_black, (c, row, col)).astype(np.float32)
+
+    def srn_other_inputs(self):
+        imgC, imgH, imgW = self.rec_image_shape
+        feature_dim = int((imgH / 8) * (imgW / 8))
+
+        num_heads = 8
+        max_text_length = 25
+        encoder_word_pos = np.array(range(0, feature_dim)).reshape(
+            (feature_dim, 1)).astype('int64')
+        gsrm_word_pos = np.array(range(0, max_text_length)).reshape(
+            (max_text_length, 1)).astype('int64')
+
+        gsrm_attn_bias_data = np.ones((1, max_text_length, max_text_length))
+        gsrm_slf_attn_bias1 = np.triu(gsrm_attn_bias_data, 1).reshape(
+            [-1, 1, max_text_length, max_text_length])
+        gsrm_slf_attn_bias1 = np.tile(gsrm_slf_attn_bias1,
+                                      [1, num_heads, 1, 1]) * [-1e9]
+
+        gsrm_slf_attn_bias2 = np.tril(gsrm_attn_bias_data, -1).reshape(
+            [-1, 1, max_text_length, max_text_length])
+        gsrm_slf_attn_bias2 = np.tile(gsrm_slf_attn_bias2,
+                                      [1, num_heads, 1, 1]) * [-1e9]
+
+        encoder_word_pos = encoder_word_pos[np.newaxis, :]
+        gsrm_word_pos = gsrm_word_pos[np.newaxis, :]
+
+        return [
+            encoder_word_pos, gsrm_word_pos, gsrm_slf_attn_bias1,
+            gsrm_slf_attn_bias2
+        ]
 
     def __call__(self, img_list):
         img_num = len(img_list)
@@ -98,11 +155,39 @@ class TextRecognizer(object):
                 norm_img = self.resize_norm_img(img_list[indices[ino]],
                                                 max_wh_ratio)
                 norm_img = norm_img[np.newaxis, :]
-                norm_img_batch.append(norm_img)
+                if self.loss_type == "srn":
+                    [encoder_word_pos, gsrm_word_pos, gsrm_slf_attn_bias1, gsrm_slf_attn_bias2] = \
+                      self.srn_other_inputs()
+                    encoder_word_pos_list = []
+                    gsrm_word_pos_list = []
+                    gsrm_slf_attn_bias1_list = []
+                    gsrm_slf_attn_bias2_list = []
+                    encoder_word_pos_list.append(encoder_word_pos)
+                    gsrm_word_pos_list.append(gsrm_word_pos)
+                    gsrm_slf_attn_bias1_list.append(gsrm_slf_attn_bias1)
+                    gsrm_slf_attn_bias2_list.append(gsrm_slf_attn_bias2)
+
+                    encoder_word_pos_list = np.concatenate(
+                        encoder_word_pos_list, axis=0).astype(np.int64)
+                    gsrm_word_pos_list = np.concatenate(
+                        gsrm_word_pos_list, axis=0).astype(np.int64)
+                    gsrm_slf_attn_bias1_list = np.concatenate(
+                        gsrm_slf_attn_bias1_list, axis=0).astype(np.float32)
+                    gsrm_slf_attn_bias2_list = np.concatenate(
+                        gsrm_slf_attn_bias2_list, axis=0).astype(np.float32)
+                    norm_img_batch.append(norm_img)
+                    #norm_img_batch.append([norm_img,encoder_word_pos_list, gsrm_word_pos_list, gsrm_slf_attn_bias1_list, gsrm_slf_attn_bias2_list])
             norm_img_batch = np.concatenate(norm_img_batch)
+            print(norm_img_batch.shape)
             norm_img_batch = norm_img_batch.copy()
+            encoder_word_batch = encoder_word_pos_list.copy()
+            gsrm_word_pos_batch = gsrm_word_pos_list.copy()
+            gsrm_slf_attn_bias1_batch = gsrm_slf_attn_bias1_list.copy()
+            gsrm_slf_attn_bias2_batch = gsrm_slf_attn_bias2_list.copy()
             starttime = time.time()
-            self.input_tensor.copy_from_cpu(norm_img_batch)
+            self.input_tensor.copy_from_cpu(
+                norm_img_batch, encoder_word_batch, gsrm_word_pos_batch,
+                gsrm_slf_attn_bias1_batch, gsrm_slf_attn_bias2_batch)
             self.predictor.zero_copy_run()
 
             if self.loss_type == "ctc":
@@ -128,7 +213,7 @@ class TextRecognizer(object):
                     score = np.mean(probs[valid_ind, ind[valid_ind]])
                     # rec_res.append([preds_text, score])
                     rec_res[indices[beg_img_no + rno]] = [preds_text, score]
-            else:
+            elif self.loss_type == "attention":
                 rec_idx_batch = self.output_tensors[0].copy_to_cpu()
                 predict_batch = self.output_tensors[1].copy_to_cpu()
                 elapse = time.time() - starttime
@@ -144,7 +229,19 @@ class TextRecognizer(object):
                     preds_text = self.char_ops.decode(preds)
                     # rec_res.append([preds_text, score])
                     rec_res[indices[beg_img_no + rno]] = [preds_text, score]
-
+            elif self.loss_type == "srn":
+                rec_idx_batch = self.output_tensors[0].copy_to_cpu()
+                predict_batch = self.output_tensors[1].copy_to_cpu()
+                elapse = time.time() - starttime
+                predict_time += elapse
+                for rno in range(len(rec_idx_batch)):
+                    valid_ind = np.where(preds != 37)[0]
+                    if len(valid_ind) == 0:
+                        continue
+                    score = np.mean(probs[valid_ind, ind[valid_ind]])
+                    preds = preds[:valid_ind[-1] + 1]
+                    preds_text = char_ops.decode(preds)
+                    rec_res[indices[beg_img_no + rno]] = [preds_text, score]
         return rec_res, predict_time
 
 
