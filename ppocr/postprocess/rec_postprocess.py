@@ -172,3 +172,39 @@ class AttnLabelDecode(BaseRecLabelDecode):
             assert False, "unsupport type %s in get_beg_end_flag_idx" \
                           % beg_or_end
         return idx
+
+class SRNLabelDecode(BaseRecLabelDecode):
+    """ Convert between text-label and text-index """
+
+    def __init__(self,
+                 character_dict_path=None,
+                 character_type='en',
+                 use_space_char=False,
+                 **kwargs):
+        super(SRNLabelDecode, self).__init__(character_dict_path,
+                                              character_type, use_space_char)
+        self.beg_str = "sos"
+        self.end_str = "eos"
+
+    def add_special_char(self, dict_character):
+        dict_character = dict_character + [self.beg_str, self.end_str]
+        return dict_character
+
+    def __call__(self, text):
+        text = self.decode(text)
+        return text
+
+    def get_ignored_tokens(self):
+        beg_idx = self.get_beg_end_flag_idx("beg")
+        end_idx = self.get_beg_end_flag_idx("end")
+        return [beg_idx, end_idx]
+
+    def get_beg_end_flag_idx(self, beg_or_end):
+        if beg_or_end == "beg":
+            idx = np.array(self.dict[self.beg_str])
+        elif beg_or_end == "end":
+            idx = np.array(self.dict[self.end_str])
+        else:
+            assert False, "unsupport type %s in get_beg_end_flag_idx" \
+                          % beg_or_end
+        return idx

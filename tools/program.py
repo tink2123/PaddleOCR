@@ -225,6 +225,8 @@ def train(config,
                 strs = 'epoch: [{}/{}], iter: {}, {}, time: {:.3f}'.format(
                     epoch, epoch_num, global_step, logs, train_batch_elapse)
                 logger.info(strs)
+                exit()
+
             # eval
             if global_step > start_eval_step and \
                     (global_step - start_eval_step) % eval_batch_step == 0 and dist.get_rank() == 0:

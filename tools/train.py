@@ -64,6 +64,7 @@ def main(config, device, logger, vdl_writer):
     if hasattr(post_process_class, 'character'):
         config['Architecture']["Head"]['out_channels'] = len(
             getattr(post_process_class, 'character'))
+
     model = build_model(config['Architecture'])
     if config['Global']['distributed']:
         model = paddle.DataParallel(model)

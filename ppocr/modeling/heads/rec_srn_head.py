@@ -1,4 +1,4 @@
-# copyright (c) 2019 PaddlePaddle Authors. All Rights Reserve.
+# copyright (c) 2020 PaddlePaddle Authors. All Rights Reserve.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,105 +18,106 @@ from __future__ import print_function
 
 import math
 
-import paddle
-from paddle import ParamAttr, nn
 from paddle import nn, ParamAttr
 from paddle.nn import functional as F
 import paddle.fluid as fluid
 import numpy as np
-from .self_attention.model import wrap_encoder
-from .self_attention.model import wrap_encoder_forFeature
+from self_attention import WrapEncoderForFeature
 gradient_clip = 10
 
-class SRN(nn.Layer):
-    def __init__(self, in_channels, out_channels, **kwargs):
-        super(SRN, self).__init__()
 
 class PVAM(nn.Layer):
-    def __init__(self, in_channels, out_channels):
-        super(PVAM, self).__init__()
-        self.word_features0 = WrapEncoderForFeature
+    def __init__(self, in_channels, params):
+        super(PVAM,self).__init__()
+        self.char_num = params['char_num']
+        self.max_length = params['max_text_length']
 
-class WrapEncoderForFeature(nn.Layer):
-    def __init__(self, in_channels, out_channels):
-        super(WrapEncoderForFeature, self).__init__()
+        self.num_heads = params['num_heads']
+        self.num_encoder_TUs = params['num_encoder_TUs']
+        self.num_decoder_TUs = params['num_decoder_TUs']
+        self.hidden_dims = params['hidden_dims']
+        # Transformer encoder
+        t = 256
+        c = 512
+        self.wrap_encoder_for_feature = WrapEncoderForFeature(
+            src_vocab_size=1,
+            max_length=t,
+            n_layer=self.num_encoder_TUs,
+            n_head=self.num_heads,
+            d_key=int(self.hidden_dims / self.num_heads),
+            d_value=int(self.hidden_dims / self.num_heads),
+            d_model=self.hidden_dims,
+            d_inner_hid=self.hidden_dims,
+            prepostprocess_dropout=0.1,
+            attention_dropout=0.1,
+            relu_dropout=0.1,
+            preprocess_cmd="n",
+            postprocess_cmd="da",
+            weight_sharing=True)
 
-class PrepareEncoder(nn.Layer):
-    def __init__(self,
-                 src_vocab_size,
-                 src_emb_dim,
-                 src_max_len,
-                 dropout_rate=0,
-                 bos_idx=0,
-                 word_emb_param_name=None,
-                 pos_enc_param_name=None):
-        super(PrepareEncoder, self).__init__()
-        self.emb = paddle.nn.Embedding(
-            num_embeddings=src_max_len,
-            embedding_dim=src_emb_dim,
-            weight_attr=paddle.ParamAttr(name=pos_enc_param_name, trainable=True))
-        self.scale = paddle.scale(scale=src_emb_dim**0.5)
-        self.dropout = paddle.nn.Dropout(p=dropout_rate)
-        self.dropout_rate = dropout_rate
-    def forword(self, src_word, src_pos):
-        src_word_emb = src_word
-        src_word_emb = fluid.layers.cast(src_word_emb, 'float32')
-        src_word_emb = self.scale(src_word_emb)
-        src_pos_enc = self.emb(src_pos)
-        enc_input = src_word_emb + src_pos_enc
-        if self.dropout_rate:
-            out = self.dropout(enc_input)
-        else:
-            out = enc_input
-        return out
+        # PVAM
+        self.flatten0 = paddle.nn.Flatten(start_axis=0,stop_axis=2)
+        self.fc0 = paddle.nn.Linear(in_features=in_channels,
+                                    out_features=in_channels,
+                                    )
+        self.emb = paddle.nn.Embedding(num_embeddings=self.max_length,embedding_dim=in_channels)
+        self.flatten1 = paddle.nn.Flatten(stop_axis=0, start_axis=3)
+        self.fc1 = paddle.nn.Linear(in_features=in_channels, out_features=1, bias_attr=False)
 
-class PrepareDecoder(nn.Layer):
-    def __init__(self,
-                 src_vocab_size,
-                 src_emb_dim,
-                 src_max_len,
-                 dropout_rate=0,
-                 bos_idx=0,
-                 word_emb_param_name=None,
-                 pos_enc_param_name=None):
-        super(PrepareDecoder, self).__init__()
-        self.emb = paddle.nn.Embedding(
-            num_embeddings=src_vocab_size,
-            embedding_dim=src_emb_dim,
-            weight_attr=paddle.ParamAttr(name=pos_enc_param_name,
-                                         initializer=paddle.normal(mean=0,std=src_emb_dim**-0.5),
-                                         trainable=True))
-        self.scale = paddle.scale(scale=src_emb_dim ** 0.5)
-        self.dropout = paddle.nn.Dropout(p=dropout_rate)
-        self.dropout_rate = dropout_rate
-    def forword(self, src_word, src_pos):
-        src_word_emb = self.emb(src_word)
-        src_word_emb = self.scale(src_word_emb)
-        src_pos_enc = self.emb(src_pos)
-        enc_input = src_word_emb + src_pos_enc
-        if self.dropout_rate:
-            out = self.dropout(enc_input)
-        else:
-            out = enc_input
-        return out
+    def forward(self, inputs, encoder_word_pos, gsrm_word_pos):
+        b, c, h, w = inputs.shape
+        print("inputs.shape:",inputs.shape)
+        conv_features = paddle.reshape(inputs, shape=[-1, c, h*w])
+        conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])
+        # transformer encoder
+        b, t, c = conv_features.shape
+        #encoder_word_pos = others["encoder_word_pos"]
+        #gsrm_word_pos = others["gsrm_word_pos"]
 
-class Encoder(nn.Layer):
-    def __init__(self, in_channels, out_channels):
-        super(Encoder, self).__init__()
+        enc_inputs = [conv_features, encoder_word_pos, None]
+        print("conv_features:",conv_features.shape)
+        print("encoder_word_pos:",encoder_word_pos.shape)
+        word_features = self.wrap_encoder_for_feature(enc_inputs)
+        fluid.clip.set_gradient_clip(
+            fluid.clip.GradientClipByValue(gradient_clip))
 
-class Embedder(nn.Layer):
-    """
-    Word Embedding + Position Encoding
-    """
-    def __init__(self, vocab_size, emb_dim, bos_idx=0):
-        super(Embedder, self).__init__()
+        # pvam
+        b, t, c = word_features.shape
+        word_features = self.fc0(word_features)
+        word_features = paddle.reshape(word_features, [-1, -1, t, c])
+        word_features = paddle.expand(word_features, [1, self.max_length, 1, 1])
+        word_pos_feature = self.emb(gsrm_word_pos)
+        word_pos_feature = paddle.reshape(word_pos_feature, [-1, self.max_length, 1, c])
+        word_pos_feature = paddle.expand(word_pos_feature, [1, 1, t, 1])
+        y = word_pos_feature + word_features
+        y = F.tanh(y)
+        attention_weight = self.fc1(y)
+        attention_weight = paddle.reshape(attention_weight, shape=[-1, self.max_length, t])
+        attention_weight = paddle.nn.Softmax(attention_weight,axis=-1)
+        pvam_features = paddle.matmul(attention_weight, word_features) #[b, max_length, c]
+        return pvam_features
 
-        self.word_embedder = paddle.nn.Embedding(
-            num_embeddings=vocab_size,
-            embedding_dim=emb_dim,
-            weight_attr=paddle.ParamAttr(initializer=paddle.normal(mean=0,std=src_emb_dim**-0.5),
-                                         trainable=True))
 
-    def forward(self, word):
-        word_emb = self.word_embedder(word)
-        return word_emb
+if __name__ == "__main__":
+
+    import paddle
+    paddle.disable_static()
+    encoder_word_pos_np = np.random.random((1, 256, 1)).astype('int64')
+    gsrm_word_pos_np = np.random.random((1,25,1)).astype('int64')
+    encoder_word_pos = paddle.to_tensor(encoder_word_pos_np)
+    gsrm_word_pos = paddle.to_tensor(gsrm_word_pos_np)
+    others = {"encoder_word_pos":encoder_word_pos, "gsrm_word_pos":gsrm_word_pos}
+    params = {"char_num": 38,
+              "max_text_length": 25,
+              "num_heads": 1,
+              "num_encoder_TUs": 2,
+              "num_decoder_TUs": 4,
+              "hidden_dims":512
+              }
+    pvam = PVAM(in_channels=512, params=params)
+    data_np = np.random.random((1, 512, 8, 32)).astype('float32')
+    data = paddle.to_tensor(data_np)
+    output = pvam(data, encoder_word_pos, gsrm_word_pos)
+
+
+

@@ -2,11 +2,11 @@ Global:
   use_gpu: false
   epoch_num: 500
   log_smooth_window: 20
-  print_batch_step: 10
+  print_batch_step: 1
   save_model_dir: ./output/rec/test/
   save_epoch_step: 500
   # evaluation is run every 5000 iterations after the 4000th iteration
-  eval_batch_step: 127
+  eval_batch_step: 500
   # if pretrained_model is saved in static mode, load_static_weights must set to True
   load_static_weights: True
   cal_metric_during_train: True
@@ -16,7 +16,7 @@ Global:
   use_visualdl: False
   infer_img: doc/imgs_words/ch/word_1.jpg
   # for data or label process
-  max_text_length: 80
+  max_text_length: 25
   character_dict_path: ppocr/utils/ppocr_keys_v1.txt
   character_type: 'ch'
   use_space_char: False
@@ -66,9 +66,9 @@ Metric:
 TRAIN:
   dataset:
     name: SimpleDataSet
-    data_dir: /home/zhoujun20/rec
+    data_dir: train_data/ic15_data
     file_list:
-      - /home/zhoujun20/rec/real_data.txt # dataset1
+      - train_data/ic15_data/rec_gt_test.txt
     ratio_list: [ 0.4,0.6 ]
     transforms:
       - DecodeImage: # load image
@@ -81,7 +81,7 @@ TRAIN:
       - keepKeys:
           keep_keys: [ 'image','label','length' ] # dataloader将按照此顺序返回list
   loader:
-    batch_size: 256
+    batch_size: 1
     shuffle: True
     drop_last: True
     num_workers: 6
@@ -89,9 +89,9 @@ TRAIN:
 EVAL:
   dataset:
     name: SimpleDataSet
-    data_dir: /home/zhoujun20/rec
+    data_dir: train_data/ic15_data
     file_list:
-      - /home/zhoujun20/rec/label_val_all.txt
+      - train_data/ic15_data/rec_gt_test.txt
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
@@ -104,5 +104,5 @@ EVAL:
   loader:
     shuffle: False
     drop_last: False
-    batch_size: 256
+    batch_size: 1
     num_workers: 6
