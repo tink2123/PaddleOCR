@@ -46,12 +46,13 @@ class WrapEncoderForFeature(nn.Layer):
                  bos_idx=0):
         super(WrapEncoderForFeature, self).__init__()
 
-        self.prepare_encoder = PrepareEncoder(src_vocab_size,
-                                              d_model,
-                                              max_length,
-                                              prepostprocess_dropout,
-                                              bos_idx=bos_idx,
-                                              word_emb_param_name="src_word_emb_table")
+        self.prepare_encoder = PrepareEncoder(
+            src_vocab_size,
+            d_model,
+            max_length,
+            prepostprocess_dropout,
+            bos_idx=bos_idx,
+            word_emb_param_name="src_word_emb_table")
         self.encoder = Encoder(n_layer, n_head, d_key, d_value, d_model,
                                d_inner_hid, prepostprocess_dropout,
                                attention_dropout, relu_dropout, preprocess_cmd,
@@ -60,10 +61,10 @@ class WrapEncoderForFeature(nn.Layer):
     def forward(self, enc_inputs):
         conv_features, src_pos, src_slf_attn_bias = enc_inputs
         print("=====WrapEncoderForFeature=====")
-        print("src_pos:",src_pos.shape)
-        print("conv_features:",conv_features.shape)
+        print("src_pos:", src_pos.shape)
+        print("conv_features:", conv_features.shape)
         enc_input = self.prepare_encoder(conv_features, src_pos)
-        print("warp enc input:",enc_input.shape)
+        print("warp enc input:", enc_input.shape)
         enc_output = self.encoder(enc_input, src_slf_attn_bias)
         print("===============================")
         return enc_output
@@ -73,6 +74,7 @@ class WrapEncoder(nn.Layer):
     """
     embedder + encoder
     """
+
     def __init__(self,
                  src_vocab_size,
                  max_length,
@@ -91,12 +93,13 @@ class WrapEncoder(nn.Layer):
                  bos_idx=0):
         super(WrapEncoder, self).__init__()
 
-        self.prepare_decoder = PrepareDecoder(src_vocab_size,
-                                              d_model,
-                                              max_length,
-                                              prepostprocess_dropout,
-                                              bos_idx=bos_idx,
-                                              word_emb_param_name="src_word_emb_table")
+        self.prepare_decoder = PrepareDecoder(
+            src_vocab_size,
+            d_model,
+            max_length,
+            prepostprocess_dropout,
+            bos_idx=bos_idx,
+            word_emb_param_name="src_word_emb_table")
 
         self.encoder = Encoder(n_layer, n_head, d_key, d_value, d_model,
                                d_inner_hid, prepostprocess_dropout,
@@ -107,14 +110,16 @@ class WrapEncoder(nn.Layer):
         src_word, src_pos, src_slf_attn_bias = enc_inputs
         print("warp encoder, src_word:", src_word.shape)
         print("warp encoder, sec_pos:", src_pos.shape)
-        enc_input = self.prepare_decoder(src_word,src_pos)
+        enc_input = self.prepare_decoder(src_word, src_pos)
         enc_output = self.encoder(enc_input, src_slf_attn_bias)
         return enc_output
+
 
 class Encoder(nn.Layer):
     """
     encoder
     """
+
     def __init__(self,
                  n_layer,
                  n_head,
@@ -154,6 +159,7 @@ class EncoderLayer(nn.Layer):
     """
     EncoderLayer
     """
+
     def __init__(self,
                  n_head,
                  d_key,
@@ -182,18 +188,20 @@ class EncoderLayer(nn.Layer):
                                                   prepostprocess_dropout)
 
     def forward(self, enc_input, attn_bias):
-        attn_output = self.self_attn(self.preprocesser1(enc_input), None, None,
-                                     attn_bias)
+        attn_output = self.self_attn(
+            self.preprocesser1(enc_input), None, None, attn_bias)
         attn_output = self.postprocesser1(attn_output, enc_input)
 
         ffn_output = self.ffn(self.preprocesser2(attn_output))
         ffn_output = self.postprocesser2(ffn_output, attn_output)
         return ffn_output
 
+
 class MultiHeadAttention(nn.Layer):
     """
     Multi-Head Attention
     """
+
     def __init__(self, d_key, d_value, d_model, n_head=1, dropout_rate=0.):
         super(MultiHeadAttention, self).__init__()
         self.n_head = n_head
@@ -202,21 +210,13 @@ class MultiHeadAttention(nn.Layer):
         self.d_model = d_model
         self.dropout_rate = dropout_rate
         self.q_fc = paddle.nn.Linear(
-            in_features=d_model,
-            out_features=d_key * n_head,
-            bias_attr=False)
+            in_features=d_model, out_features=d_key * n_head, bias_attr=False)
         self.k_fc = paddle.nn.Linear(
-            in_features=d_model,
-            out_features=d_key * n_head,
-            bias_attr=False)
+            in_features=d_model, out_features=d_key * n_head, bias_attr=False)
         self.v_fc = paddle.nn.Linear(
-            in_features=d_model,
-            out_features=d_value * n_head,
-            bias_attr=False)
+            in_features=d_model, out_features=d_value * n_head, bias_attr=False)
         self.proj_fc = paddle.nn.Linear(
-            in_features=d_value * n_head,
-            out_features=d_model,
-            bias_attr=False)
+            in_features=d_value * n_head, out_features=d_model, bias_attr=False)
 
     def _prepare_qkv(self, queries, keys, values, cache=None):
         if keys is None:  # self-attention
@@ -225,10 +225,9 @@ class MultiHeadAttention(nn.Layer):
         else:  # cross-attention
             static_kv = True
 
-        print("queries shape:",queries.shape)
+        print("queries shape:", queries.shape)
         q = self.q_fc(queries)
-        print("q shape:",q.shape)
-        exit()
+        print("q shape:", q.shape)
         q = paddle.reshape(x=q, shape=[0, 0, self.n_head, self.d_key])
         q = paddle.transpose(x=q, perm=[0, 2, 1, 3])
 
@@ -262,18 +261,13 @@ class MultiHeadAttention(nn.Layer):
         q, k, v = self._prepare_qkv(queries, keys, values, cache)
 
         # scale dot product attention
-        product = paddle.matmul(x=q,
-                                y=k,
-                                transpose_y=True)
+        product = paddle.matmul(x=q, y=k, transpose_y=True)
         product = product * self.d_model**-0.5
         if attn_bias is not None:
             product += attn_bias
-        weights = paddle.softmax(product)
+        weights = F.softmax(product)
         if self.dropout_rate:
-            weights = paddle.dropout(weights,
-                                     dropout_prob=self.dropout_rate,
-                                     is_test=False)
-
+            weights = F.dropout(weights, p=self.dropout_rate)
         out = paddle.matmul(weights, v)
 
         # combine heads
@@ -289,6 +283,7 @@ class PrePostProcessLayer(nn.Layer):
     """
     PrePostProcessLayer
     """
+
     def __init__(self, process_cmd, d_model, dropout_rate):
         super(PrePostProcessLayer, self).__init__()
         self.process_cmd = process_cmd
@@ -299,8 +294,8 @@ class PrePostProcessLayer(nn.Layer):
             elif cmd == "n":  # add layer normalization
                 self.functors.append(
                     self.add_sublayer(
-                        "layer_norm_%d" %
-                        len(self.sublayers(include_sublayers=False)),
+                        "layer_norm_%d" % len(
+                            self.sublayers(include_sublayers=False)),
                         paddle.nn.LayerNorm(
                             normalized_shape=d_model,
                             weight_attr=fluid.ParamAttr(
@@ -320,6 +315,7 @@ class PrePostProcessLayer(nn.Layer):
                 x = self.functors[i](x)
         return x
 
+
 class PrepareEncoder(nn.Layer):
     def __init__(self,
                  src_vocab_size,
@@ -331,10 +327,15 @@ class PrepareEncoder(nn.Layer):
                  pos_enc_param_name=None):
         super(PrepareEncoder, self).__init__()
         self.src_emb_dim = src_emb_dim
+        """
         self.emb = paddle.nn.Embedding(
             num_embeddings=src_max_len,
             embedding_dim=src_emb_dim,
             weight_attr=paddle.ParamAttr(name=pos_enc_param_name, trainable=True))
+        """
+        self.emb = paddle.fluid.dygraph.Embedding(
+            size=[src_max_len, src_emb_dim],
+            param_attr=paddle.ParamAttr(name="aaa"))
         self.dropout_rate = dropout_rate
 
     def forward(self, src_word, src_pos):
@@ -342,17 +343,19 @@ class PrepareEncoder(nn.Layer):
         src_word_emb = src_word
         src_word_emb = fluid.layers.cast(src_word_emb, 'float32')
         src_word_emb = paddle.scale(x=src_word_emb, scale=self.src_emb_dim**0.5)
-        print("prepare encoder:", src_word_emb.shape)
+        print("prepare encoder:", src_pos.shape)
         src_pos_enc = self.emb(src_pos)
-        print("after unsqueeze:",src_pos_enc.shape)
-        print("src_pos_enc:",src_pos_enc.shape)
+        src_pos_enc = paddle.flatten(src_pos_enc, start_axis=-2)
+        print("after emb:", src_pos_enc.shape)
+        print("src_pos_enc:", src_pos_enc.shape)
         enc_input = src_word_emb + src_pos_enc
         if self.dropout_rate:
-            out = F.dropout(x=enc_input,p=self.dropout_rate,training=True)
+            out = F.dropout(x=enc_input, p=self.dropout_rate, training=True)
         else:
             out = enc_input
         print("================================")
         return out
+
 
 class PrepareDecoder(nn.Layer):
     def __init__(self,
@@ -366,14 +369,12 @@ class PrepareDecoder(nn.Layer):
         super(PrepareDecoder, self).__init__()
         self.src_emb_dim = src_emb_dim
         self.emb0 = paddle.nn.Embedding(
-            num_embeddings=src_vocab_size,
-            embedding_dim=self.src_emb_dim)
-            #weight_attr=paddle.ParamAttr(name=pos_enc_param_name,
-            #                             initializer=paddle.distribution.Normal(loc=0, scale=src_emb_dim**-0.5),
-            #                             trainable=True))
+            num_embeddings=src_vocab_size, embedding_dim=self.src_emb_dim)
+        #weight_attr=paddle.ParamAttr(name=pos_enc_param_name,
+        #                             initializer=paddle.distribution.Normal(loc=0, scale=src_emb_dim**-0.5),
+        #                             trainable=True))
         self.emb1 = paddle.nn.Embedding(
-            num_embeddings=src_max_len,
-            embedding_dim=self.src_emb_dim)
+            num_embeddings=src_max_len, embedding_dim=self.src_emb_dim)
         self.dropout_rate = dropout_rate
 
     def forward(self, src_word, src_pos):
@@ -381,11 +382,11 @@ class PrepareDecoder(nn.Layer):
         src_word = fluid.layers.cast(src_word, 'int64')
         src_word_emb = self.emb0(src_word)
         print("src_word_em0:", src_word_emb.shape)
-        src_word_emb = paddle.scale(x=src_word_emb, scale=self.src_emb_dim ** 0.5)
-        print("src pos:",src_pos.shape)
+        src_word_emb = paddle.scale(x=src_word_emb, scale=self.src_emb_dim**0.5)
+        print("src pos:", src_pos.shape)
         src_pos_enc = self.emb1(src_pos)
-        print("src_word_emb:",src_word_emb.shape)
-        print("src_pos_enc:",src_pos_enc.shape)
+        print("src_word_emb:", src_word_emb.shape)
+        print("src_pos_enc:", src_pos_enc.shape)
         enc_input = src_word_emb + src_pos_enc
         if self.dropout_rate:
             out = F.dropout(x=enc_input, p=self.dropout_rate, training=True)
@@ -393,22 +394,25 @@ class PrepareDecoder(nn.Layer):
             out = enc_input
         return out
 
+
 class FFN(nn.Layer):
     """
     Feed-Forward Network
     """
+
     def __init__(self, d_inner_hid, d_model, dropout_rate):
         super(FFN, self).__init__()
         self.dropout_rate = dropout_rate
-        self.flatten = paddle.nn.Flatten(start_axis=1,stop_axis=2)
-        self.fc1 = paddle.nn.Linear(in_features=d_model, out_features=d_inner_hid)
-        self.fc2 = paddle.nn.Linear(in_features=d_inner_hid, out_features=d_model)
+        self.flatten = paddle.nn.Flatten(start_axis=1, stop_axis=2)
+        self.fc1 = paddle.nn.Linear(
+            in_features=d_model, out_features=d_inner_hid)
+        self.fc2 = paddle.nn.Linear(
+            in_features=d_inner_hid, out_features=d_model)
 
     def forward(self, x):
         hidden = self.fc1(x)
         hidden = F.relu(hidden)
         if self.dropout_rate:
-            hidden = F.dropout(hidden,p=self.dropout_rate,training=True)
+            hidden = F.dropout(hidden, p=self.dropout_rate, training=True)
         out = self.fc2(hidden)
         return out
-
