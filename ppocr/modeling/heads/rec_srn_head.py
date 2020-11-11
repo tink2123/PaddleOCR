@@ -69,27 +69,19 @@ class PVAM(nn.Layer):
 
     def forward(self, inputs, encoder_word_pos, gsrm_word_pos):
         b, c, h, w = inputs.shape
-        #print("inputs.shape:", inputs.shape)
         conv_features = paddle.reshape(inputs, shape=[-1, c, h * w])
         conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])
         # transformer encoder
         b, t, c = conv_features.shape
-        #encoder_word_pos = others["encoder_word_pos"]
-        #gsrm_word_pos = others["gsrm_word_pos"]
 
         enc_inputs = [conv_features, encoder_word_pos, None]
-        #print("conv_features:", conv_features.shape)
-        #print("encoder_word_pos:", encoder_word_pos.shape)
         word_features = self.wrap_encoder_for_feature(enc_inputs)
 
         # pvam
         b, t, c = word_features.shape
         word_features = self.flatten0(word_features)
-        #print("after flatten:",word_features.shape)
         word_features = self.fc0(word_features)
-        #print("pvam word features shape:", word_features.shape)
         word_features_ = paddle.reshape(word_features, [-1, 1, t, c])
-        #print("reshape:", word_features.shape)
         word_features_ = paddle.tile(word_features_, [1, self.max_length, 1, 1])
         word_pos_feature = self.emb(gsrm_word_pos)
         word_pos_feature_ = paddle.reshape(word_pos_feature,
@@ -97,17 +89,13 @@ class PVAM(nn.Layer):
         word_pos_feature_ = paddle.tile(word_pos_feature_, [1, 1, t, 1])
         y = word_pos_feature_ + word_features_
         y = F.tanh(y)
-        #print("before flatten:", y.shape)
-        #y = self.flatten1(y)
-        #print("after flatten:", y.shape)
         attention_weight = self.fc1(y)
-        #print("fc:", attention_weight.shape)
         attention_weight = paddle.reshape(
             attention_weight, shape=[-1, self.max_length, t])
-        #print("after reshape:", attention_weight.shape)
         attention_weight = F.softmax(attention_weight, axis=-1)
         pvam_features = paddle.matmul(attention_weight,
                                       word_features)  #[b, max_length, c]
+        #print("dy pvam feature:", np.sum(pvam_features.numpy()))
         return pvam_features
 
 
@@ -127,7 +115,7 @@ class GSRM(nn.Layer):
         self.wrap_encoder0 = WrapEncoder(
             src_vocab_size=self.char_num + 1,
             max_length=self.max_length,
-            n_layer=self.num_encoder_TUs,
+            n_layer=self.num_decoder_TUs,
             n_head=self.num_heads,
             d_key=int(self.hidden_dims / self.num_heads),
             d_value=int(self.hidden_dims / self.num_heads),
@@ -177,11 +165,8 @@ class GSRM(nn.Layer):
         """
         pad_idx = self.char_num
 
-        # prepare bi for gsrm, word1 for forward, word2 for backward
         word1 = paddle.cast(word_ids, "float32")
-        #print("word1 shape:",word1.shape)
         word1 = F.pad(word1, [1, 0], value=1.0 * pad_idx, data_format="NLC")
-        #print("word1 pad shape:",word1.shape)
         word1 = paddle.cast(word1, "int64")
         word1 = word1[:, :-1, :]
         word2 = word_ids
@@ -190,6 +175,7 @@ class GSRM(nn.Layer):
         enc_inputs_2 = [word2, gsrm_word_pos, gsrm_slf_attn_bias2]
 
         gsrm_feature1 = self.wrap_encoder0(enc_inputs_1)
+        #print("wrap_encoder:", gsrm_feature1.numpy())
         gsrm_feature2 = self.wrap_encoder1(enc_inputs_2)
 
         gsrm_feature2 = F.pad(gsrm_feature2, [0, 1],
@@ -220,9 +206,7 @@ class VSFD(nn.Layer):
         b, t, c1 = pvam_feature.shape
         b, t, c2 = gsrm_feature.shape
         combine_feature = paddle.concat([pvam_feature, gsrm_feature], axis=2)
-        #print("combine feature:", combine_feature.shape)
         img_comb_feature = paddle.reshape(combine_feature, shape=[-1, c1 + c2])
-        #print("img_comb_feature:",img_comb_feature.shape)
         img_comb_feature_map = self.fc0(img_comb_feature)
         img_comb_feature_map = F.sigmoid(img_comb_feature_map)
         img_comb_feature_map = paddle.reshape(
@@ -263,15 +247,7 @@ class SRN(nn.Layer):
             hidden_dims=self.hidden_dims)
         self.vsfd = VSFD(in_channels=in_channels)
 
-        self.pvam.wrap_encoder_for_feature.prepare_encoder.emb = self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.gsrm.wrap_encoder1.prepare_decoder.emb0
-
-        print(
-            "pvam emb:",
-            self.pvam.wrap_encoder_for_feature.prepare_encoder.emb.weight.name)
-        print("gsrm emb0:",
-              self.gsrm.wrap_encoder0.prepare_decoder.emb0.weight.name)
-        print("gsrm emb1:",
-              self.gsrm.wrap_encoder1.prepare_decoder.emb0.weight.name)
+        #self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.pvam.wrap_encoder_for_feature.prepare_encoder.emb
 
     def forward(self, inputs, others):
         encoder_word_pos = others["encoder_word_pos"]
@@ -281,10 +257,12 @@ class SRN(nn.Layer):
 
         pvam_feature = self.pvam(inputs, encoder_word_pos, gsrm_word_pos)
         gsrm_feature, word_out, gsrm_out = self.gsrm(
-            pvam_features, gsrm_word_pos, gsrm_slf_attn_bias1,
+            pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,
             gsrm_slf_attn_bias2)
+        self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.pvam.wrap_encoder_for_feature.prepare_encoder.emb
 
         final_out = self.vsfd(pvam_feature, gsrm_feature)
+
         _, decoded_out = paddle.topk(final_out, k=1)
 
         predicts = {
@@ -298,40 +276,125 @@ class SRN(nn.Layer):
 
 if __name__ == "__main__":
 
-    import paddle
-    paddle.disable_static()
-    encoder_word_pos_np = np.random.random((1, 256, 1)).astype('int64')
-    pvam_feature_np = np.random.random((1, 25, 512)).astype('float32')
-    gsrm_word_pos_np = np.random.random((1, 25, 1)).astype('int64')
-    gsrm_slf_attn_bias1 = np.random.random((1, 8, 25, 25)).astype('float32')
-    gsrm_slf_attn_bias2 = np.random.random((1, 8, 25, 25)).astype('float32')
+    import numpy as np
+    import unittest
+    from srn_head_st import SRNPredict
+    import os
 
-    encoder_word_pos = paddle.to_tensor(encoder_word_pos_np)
-    pvam_features = paddle.to_tensor(pvam_feature_np)
-    gsrm_word_pos = paddle.to_tensor(gsrm_word_pos_np)
-    gsrm_slf_attn_bias1 = paddle.to_tensor(gsrm_slf_attn_bias1)
-    gsrm_slf_attn_bias2 = paddle.to_tensor(gsrm_slf_attn_bias2)
+    import paddle.fluid as fluid
 
-    others = {
-        "encoder_word_pos": encoder_word_pos,
-        "gsrm_word_pos": gsrm_word_pos,
-        "gsrm_slf_attn_bias1": gsrm_slf_attn_bias1,
-        "gsrm_slf_attn_bias2": gsrm_slf_attn_bias2
-    }
-    params = {
-        "char_num": 38,
-        "max_text_length": 25,
-        "num_heads": 8,
-        "num_encoder_TUs": 2,
-        "num_decoder_TUs": 4,
-        "hidden_dims": 512
-    }
+    class TestDygraph(unittest.TestCase):
+        def test(self):
+            startup = fluid.Program()
+            startup.random_seed = 111
+            main = fluid.Program()
+            main.random_seed = 111
+            scope = fluid.core.Scope()
 
-    #pvam = PVAM(in_channels=512, params=params)
-    #gsrm = GSRM(in_channels=512, params=params)
-    srn = SRN(in_channels=512, params=params)
+            place = fluid.CPUPlace()
 
-    data_np = np.random.random((1, 512, 8, 32)).astype('float32')
-    data = paddle.to_tensor(data_np)
-    predicts = srn(data, others)
-    print("srn out:", predicts['predict'].shape)
+            with fluid.dygraph.guard(place):
+                fluid.default_startup_program().random_seed = 10
+                fluid.default_main_program().random_seed = 10
+                dy_param_init_value = {}
+                np.random.seed(1333)
+                data_np = np.random.random((1, 512, 8, 32)).astype('float32')
+                encoder_word_pos_np = np.random.random(
+                    (1, 256, 1)).astype('int64')
+                pvam_feature_np = np.random.random(
+                    (1, 25, 512)).astype('float32')
+                gsrm_word_pos_np = np.random.random((1, 25, 1)).astype('int64')
+                gsrm_slf_attn_bias1_np = np.random.random(
+                    (1, 8, 25, 25)).astype('float32')
+                gsrm_slf_attn_bias2_np = np.random.random(
+                    (1, 8, 25, 25)).astype('float32')
+
+                encoder_word_pos = paddle.to_tensor(encoder_word_pos_np)
+                pvam_features = paddle.to_tensor(pvam_feature_np)
+                gsrm_word_pos = paddle.to_tensor(gsrm_word_pos_np)
+                gsrm_slf_attn_bias1 = paddle.to_tensor(gsrm_slf_attn_bias1_np)
+                gsrm_slf_attn_bias2 = paddle.to_tensor(gsrm_slf_attn_bias2_np)
+
+                others = {
+                    "encoder_word_pos": encoder_word_pos,
+                    "gsrm_word_pos": gsrm_word_pos,
+                    "gsrm_slf_attn_bias1": gsrm_slf_attn_bias1,
+                    "gsrm_slf_attn_bias2": gsrm_slf_attn_bias2
+                }
+                params = {
+                    "char_num": 38,
+                    "max_text_length": 25,
+                    "num_heads": 8,
+                    "num_encoder_TUs": 2,
+                    "num_decoder_TUs": 4,
+                    "hidden_dims": 512
+                }
+
+                srn = SRN(in_channels=512, params=params)
+
+                data = paddle.to_tensor(data_np)
+                predicts = srn(data, others)
+
+                #print("dy_result:", np.sum(predicts['predict'].numpy()))
+
+            with fluid.scope_guard(scope):
+                paddle.enable_static()
+                fluid.default_startup_program().random_seed = 10
+                fluid.default_main_program().random_seed = 10
+                np.random.seed(1333)
+
+                xyz = fluid.layers.data(
+                    name='xyz', shape=[512, 8, 32], dtype='float32')
+                encoder_word_pos = fluid.layers.data(
+                    "encoder_word_pos", shape=[256, 1], dtype="int64")
+                gsrm_word_pos = fluid.layers.data(
+                    name="gsrm_word_pos", shape=[25, 1], dtype="int64")
+                gsrm_slf_attn_bias1 = fluid.layers.data(
+                    name="gsrm_slf_attn_bias1",
+                    shape=[8, 25, 25],
+                    dtype="float32")
+                gsrm_slf_attn_bias2 = fluid.layers.data(
+                    name="gsrm_slf_attn_bias2",
+                    shape=[8, 25, 25],
+                    dtype="float32")
+
+                others = {
+                    "encoder_word_pos": encoder_word_pos,
+                    "gsrm_word_pos": gsrm_word_pos,
+                    "gsrm_slf_attn_bias1": gsrm_slf_attn_bias1,
+                    "gsrm_slf_attn_bias2": gsrm_slf_attn_bias2
+                }
+                srn = SRNPredict(params)
+                out = srn(xyz, others)
+                place = fluid.CPUPlace()
+                exe = fluid.Executor(place)
+                exe.run(fluid.default_startup_program())
+                #for param in fluid.default_startup_program().all_parameters():
+                #    print(param.name)
+                #param_list = ["tmp_2", "tmp_4","tmp_8","tmp_11","tmp_14", "tmp_17", "tmp_21","tmp_24", "tmp_27", "tmp_30"]
+                """
+                param_list = ["layer_norm_7.tmp_2", "dropout_15.tmp_0", "tmp_10",
+                              "layer_norm_8.tmp_2", "dropout_17.tmp_0", "tmp_13",
+                              "layer_norm_10.tmp_2", "dropout_21.tmp_0", "tmp_14",
+                              "layer_norm_11.tmp_2", "dropout_23.tmp_0", "tmp_16",
+                              "layer_norm_12.tmp_2", "dropout_25.tmp_0", "tmp_17",
+                              "layer_norm_13.tmp_2", "layer_norm_14.tmp_2", "dropout_28.tmp_0", "tmp_20"
+                              ]
+                """
+                param_list = ["tmp_31"]
+                #for param in fluid.default_startup_program().global_block().all_parameters():
+                #    print(param.name)
+                ret = exe.run(fetch_list=[out['predict']] + param_list,
+                              feed={
+                                  'xyz': data_np,
+                                  'encoder_word_pos': encoder_word_pos_np,
+                                  'gsrm_word_pos': gsrm_word_pos_np,
+                                  'gsrm_slf_attn_bias1': gsrm_slf_attn_bias1_np,
+                                  'gsrm_slf_attn_bias2': gsrm_slf_attn_bias2_np
+                              })
+                print("st_result:", np.sum(ret[0]))
+                for item in ret[1:]:
+                    print("st tmp:", np.sum(item))
+                #print("emb2 weights:", np.sum(ret[-2]))
+
+    unittest.main()
