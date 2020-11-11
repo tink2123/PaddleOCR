@@ -31,6 +31,7 @@ class SimpleDataSet(Dataset):
         self.delimiter = dataset_config.get('delimiter', '\t')
         label_file_list = dataset_config.pop('label_file_list')
         data_source_num = len(label_file_list)
+        print("data_source_num:", label_file_list)
         if data_source_num == 1:
             ratio_list = [1.0]
         else:
@@ -110,6 +111,8 @@ class SimpleDataSet(Dataset):
             img = f.read()
             data['image'] = img
         outs = transform(data, self.ops)
+        print(outs)
+        exit()
         if outs is None:
             return self.__getitem__(np.random.randint(self.__len__()))
         return outs

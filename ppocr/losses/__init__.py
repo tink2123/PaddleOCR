@@ -22,7 +22,7 @@ def build_loss(config):
     # rec loss
     from .rec_ctc_loss import CTCLoss
 
-    support_dict = ['DBLoss', 'CTCLoss']
+    support_dict = ['DBLoss', 'CTCLoss', 'SRNLoss']
 
     config = copy.deepcopy(config)
     module_name = config.pop('name')
