@@ -111,8 +111,6 @@ class SimpleDataSet(Dataset):
             img = f.read()
             data['image'] = img
         outs = transform(data, self.ops)
-        print(outs)
-        exit()
         if outs is None:
             return self.__getitem__(np.random.randint(self.__len__()))
         return outs

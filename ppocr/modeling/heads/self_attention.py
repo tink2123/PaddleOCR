@@ -214,7 +214,8 @@ class MultiHeadAttention(nn.Layer):
             static_kv = True
 
         q = self.q_fc(queries)
-        q = paddle.reshape(x=q, shape=[0, 0, self.n_head, self.d_key])
+        c = q.shape[1]
+        q = paddle.reshape(x=q, shape=[0, c, self.n_head, self.d_key])
         q = paddle.transpose(x=q, perm=[0, 2, 1, 3])
 
         if cache is not None and static_kv and "static_k" in cache:
@@ -224,9 +225,11 @@ class MultiHeadAttention(nn.Layer):
         else:
             k = self.k_fc(keys)
             v = self.v_fc(values)
-            k = paddle.reshape(x=k, shape=[0, 0, self.n_head, self.d_key])
+            c = k.shape[1]
+            k = paddle.reshape(x=k, shape=[0, c, self.n_head, self.d_key])
             k = paddle.transpose(x=k, perm=[0, 2, 1, 3])
-            v = paddle.reshape(x=v, shape=[0, 0, self.n_head, self.d_value])
+            c = v.shape[1]
+            v = paddle.reshape(x=v, shape=[0, c, self.n_head, self.d_value])
             v = paddle.transpose(x=v, perm=[0, 2, 1, 3])
 
         if cache is not None:
@@ -258,6 +261,8 @@ class MultiHeadAttention(nn.Layer):
             weights = F.dropout(
                 weights, p=self.dropout_rate, mode="downscale_in_infer")
         out = paddle.matmul(weights, v)
+        if len(out.shape) != 4:
+            raise ValueError("out should be a 4-D Tensor")
 
         # combine heads
         out = paddle.transpose(out, perm=[0, 2, 1, 3])

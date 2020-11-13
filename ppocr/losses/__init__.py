@@ -21,6 +21,7 @@ def build_loss(config):
 
     # rec loss
     from .rec_ctc_loss import CTCLoss
+    from .rec_srn_loss import SRNLoss
 
     support_dict = ['DBLoss', 'CTCLoss', 'SRNLoss']
 

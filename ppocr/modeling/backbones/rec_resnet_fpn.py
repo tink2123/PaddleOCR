@@ -18,9 +18,10 @@ from __future__ import print_function
 
 from paddle import nn, ParamAttr
 from paddle.nn import functional as F
+import paddle
 import numpy as np
 
-__all__ = ["ResNet"]
+__all__ = ["ResNetFPN"]
 
 Trainable = True
 w_nolr = ParamAttr(trainable=Trainable)
@@ -37,9 +38,9 @@ train_parameters = {
 }
 
 
-class ResNet(nn.Layer):
-    def __init__(self, in_channels=3, layers=50):
-        super(ResNet, self).__init__()
+class ResNetFPN(nn.Layer):
+    def __init__(self, in_channels=1, layers=50, **kwargs):
+        super(ResNetFPN, self).__init__()
         supported_layers = {
             18: {
                 'depth': [2, 2, 2, 2],
@@ -117,7 +118,7 @@ class ResNet(nn.Layer):
         for i in [-2, -3]:
             in_channels = out_ch_list[i + 1] + out_ch_list[i]
             self.conv_trans.append(
-                nn.ConvTranspose2d(
+                nn.Conv2DTranspose(
                     in_channels=out_ch_list[i + 1],
                     out_channels=out_ch_list[i],
                     kernel_size=4,
@@ -132,14 +133,14 @@ class ResNet(nn.Layer):
                     param_attr=paddle.ParamAttr(trainable=True),
                     bias_attr=paddle.ParamAttr(trainable=True)))
             self.base_block.append(
-                nn.Conv2d(
+                nn.Conv2D(
                     in_channels=in_channels,
                     out_channels=out_ch_list[i],
                     kernel_size=1,
                     weight_attr=ParamAttr(trainable=True),
                     bias_attr=ParamAttr(trainable=True)))
             self.base_block.append(
-                nn.Conv2d(
+                nn.Conv2D(
                     in_channels=out_ch_list[i],
                     out_channels=out_ch_list[i],
                     kernel_size=3,
@@ -153,12 +154,13 @@ class ResNet(nn.Layer):
                     param_attr=ParamAttr(trainable=True),
                     bias_attr=ParamAttr(trainable=True)))
         self.base_block.append(
-            nn.Conv2d(
+            nn.Conv2D(
                 in_channels=out_ch_list[i],
                 out_channels=512,
                 kernel_size=1,
                 bias_attr=ParamAttr(trainable=True),
                 weight_attr=ParamAttr(trainable=True)))
+        self.out_channels = 512
 
     def __call__(self, x):
         x = self.conv(x)
@@ -197,7 +199,7 @@ class ConvBNLayer(nn.Layer):
                  act=None,
                  name=None):
         super(ConvBNLayer, self).__init__()
-        self.conv = nn.Conv2d(
+        self.conv = nn.Conv2D(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=2 if stride == (1, 1) else kernel_size,

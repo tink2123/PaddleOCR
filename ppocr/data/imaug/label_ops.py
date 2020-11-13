@@ -72,6 +72,8 @@ class BaseRecLabelEncode(object):
             support_character_type, self.character_str)
 
         self.max_text_len = max_text_length
+        self.beg_str = "sos"
+        self.end_str = "eos"
         if character_type == "en":
             self.character_str = "0123456789abcdefghijklmnopqrstuvwxyz"
             dict_character = list(self.character_str)
@@ -203,7 +205,7 @@ class SRNLabelEncode(BaseRecLabelEncode):
     """ Convert between text-label and text-index """
 
     def __init__(self,
-                 max_text_length,
+                 max_text_length=25,
                  character_dict_path=None,
                  character_type='ch',
                  use_space_char=False,
@@ -211,16 +213,22 @@ class SRNLabelEncode(BaseRecLabelEncode):
         super(SRNLabelEncode,
               self).__init__(max_text_length, character_dict_path,
                              character_type, use_space_char)
-        self.beg_str = "sos"
-        self.end_str = "eos"
 
     def add_special_char(self, dict_character):
         dict_character = dict_character + [self.beg_str, self.end_str]
         return dict_character
 
-    def __call__(self, text):
+    def __call__(self, data):
+        text = data['label']
         text = self.encode(text)
-        return text
+        if text is None:
+            return None
+        if len(text) > self.max_text_len:
+            return None
+        data['length'] = np.array(len(text))
+        text = text + [37] * (self.max_text_len - len(text))
+        data['label'] = np.array(text)
+        return data
 
     def get_ignored_tokens(self):
         beg_idx = self.get_beg_end_flag_idx("beg")

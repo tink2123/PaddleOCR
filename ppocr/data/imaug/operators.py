@@ -105,6 +105,8 @@ class KeepKeys(object):
 
     def __call__(self, data):
         data_list = []
+        #print("data:", data)
+        #print("keep keys:", self.keep_keys)
         for key in self.keep_keys:
             data_list.append(data[key])
         return data_list

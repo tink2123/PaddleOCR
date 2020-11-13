@@ -192,8 +192,11 @@ def train(config,
             lr = optimizer.get_lr()
             t1 = time.time()
             images = batch[0]
-            preds = model(images)
+            others = batch[-4:]
+            #print(others)
+            preds = model(images, others)
             loss = loss_class(preds, batch)
+            #print("loss:", loss)
             avg_loss = loss['loss']
             avg_loss.backward()
             optimizer.step()
@@ -208,6 +211,8 @@ def train(config,
 
             if cal_metric_during_train:  # onlt rec and cls need
                 batch = [item.numpy() for item in batch]
+                #print("post process class:", post_process_class)
+                #print("preds:", preds)
                 post_result = post_process_class(preds, batch[1])
                 eval_class(post_result, batch)
                 metirc = eval_class.get_metric()

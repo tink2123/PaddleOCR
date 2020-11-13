@@ -33,7 +33,8 @@ class BaseModel(nn.Layer):
         """
         super(BaseModel, self).__init__()
 
-        in_channels = config.get('in_channels', 3)
+        #in_channels = config.get('in_channels', 3)
+        in_channels = config.get('in_channels', 1)
         model_type = config['model_type']
         # build transfrom,
         # for rec, transfrom can be TPS,None
@@ -68,11 +69,11 @@ class BaseModel(nn.Layer):
         config["Head"]['in_channels'] = in_channels
         self.head = build_head(config["Head"])
 
-    def forward(self, x):
+    def forward(self, x, data):
         if self.use_transform:
             x = self.transform(x)
         x = self.backbone(x)
         if self.use_neck:
             x = self.neck(x)
-        x = self.head(x)
+        x = self.head(x, data)
         return x

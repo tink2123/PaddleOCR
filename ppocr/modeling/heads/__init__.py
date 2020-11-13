@@ -21,9 +21,11 @@ def build_head(config):
 
     # rec head
     from .rec_ctc_head import CTCHead
-    support_dict = ['DBHead', 'CTCHead']
+    from .rec_srn_head import SRNHead
+    support_dict = ['DBHead', 'CTCHead', 'SRNHead']
 
     module_name = config.pop('name')
+    print(config)
     assert module_name in support_dict, Exception('head only support {}'.format(
         support_dict))
     module_class = eval(module_name)(**config)

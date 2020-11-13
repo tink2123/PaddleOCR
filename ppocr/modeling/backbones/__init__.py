@@ -23,7 +23,8 @@ def build_backbone(config, model_type):
     elif model_type == 'rec':
         from .rec_mobilenet_v3 import MobileNetV3
         from .rec_resnet_vd import ResNet
-        support_dict = ['MobileNetV3', 'ResNet', 'ResNet_FPN']
+        from .rec_resnet_fpn import ResNetFPN
+        support_dict = ['MobileNetV3', 'ResNet', 'ResNetFPN']
     else:
         raise NotImplementedError
 
@@ -31,5 +32,6 @@ def build_backbone(config, model_type):
     assert module_name in support_dict, Exception(
         'when model typs is {}, backbone only support {}'.format(model_type,
                                                                  support_dict))
+    print("back bone config:", config)
     module_class = eval(module_name)(**config)
     return module_class

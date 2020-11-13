@@ -22,8 +22,8 @@ from paddle import nn, ParamAttr
 from paddle.nn import functional as F
 import paddle.fluid as fluid
 import numpy as np
-from self_attention import WrapEncoderForFeature
-from self_attention import WrapEncoder
+from .self_attention import WrapEncoderForFeature
+from .self_attention import WrapEncoder
 from paddle.static import Program
 gradient_clip = 10
 
@@ -57,13 +57,13 @@ class PVAM(nn.Layer):
             weight_sharing=True)
 
         # PVAM
-        self.flatten0 = paddle.nn.Flatten(start_axis=0, stop_axis=1)
+        #self.flatten0 = paddle.nn.Flatten(start_axis=0, stop_axis=1)
         self.fc0 = paddle.nn.Linear(
             in_features=in_channels,
             out_features=in_channels, )
         self.emb = paddle.nn.Embedding(
             num_embeddings=self.max_length, embedding_dim=in_channels)
-        self.flatten1 = paddle.nn.Flatten(start_axis=0, stop_axis=2)
+        #self.flatten1 = paddle.nn.Flatten(start_axis=0, stop_axis=2)
         self.fc1 = paddle.nn.Linear(
             in_features=in_channels, out_features=1, bias_attr=False)
 
@@ -73,13 +73,15 @@ class PVAM(nn.Layer):
         conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])
         # transformer encoder
         b, t, c = conv_features.shape
+        #print("conv shape:", conv_features.shape)
+        #print("encoder word pos:", encoder_word_pos.shape)
 
         enc_inputs = [conv_features, encoder_word_pos, None]
         word_features = self.wrap_encoder_for_feature(enc_inputs)
 
         # pvam
-        b, t, c = word_features.shape
-        word_features = self.flatten0(word_features)
+        [b, t, c] = word_features.shape
+        #word_features = self.flatten0(word_features)
         word_features = self.fc0(word_features)
         word_features_ = paddle.reshape(word_features, [-1, 1, t, c])
         word_features_ = paddle.tile(word_features_, [1, self.max_length, 1, 1])
@@ -95,7 +97,6 @@ class PVAM(nn.Layer):
         attention_weight = F.softmax(attention_weight, axis=-1)
         pvam_features = paddle.matmul(attention_weight,
                                       word_features)  #[b, max_length, c]
-        #print("dy pvam feature:", np.sum(pvam_features.numpy()))
         return pvam_features
 
 
@@ -213,23 +214,25 @@ class VSFD(nn.Layer):
             img_comb_feature_map, shape=[-1, t, c1])
         combine_feature = img_comb_feature_map * pvam_feature + (
             1.0 - img_comb_feature_map) * gsrm_feature
+
         img_comb_feature = paddle.reshape(combine_feature, shape=[-1, c1])
 
         out = self.fc1(img_comb_feature)
+
         out = F.softmax(out)
         return out
 
 
-class SRN(nn.Layer):
-    def __init__(self, in_channels, params):
-        super(SRN, self).__init__()
-        self.char_num = params['char_num']
-        self.max_length = params['max_text_length']
-
-        self.num_heads = params['num_heads']
-        self.num_encoder_TUs = params['num_encoder_TUs']
-        self.num_decoder_TUs = params['num_decoder_TUs']
-        self.hidden_dims = params['hidden_dims']
+class SRNHead(nn.Layer):
+    def __init__(self, in_channels, max_text_length, num_heads, num_encoder_TUs,
+                 num_decoder_TUs, hidden_dims, **kwargs):
+        super(SRNHead, self).__init__()
+        self.char_num = 38
+        self.max_length = max_text_length
+        self.num_heads = num_heads
+        self.num_encoder_TUs = num_encoder_TUs
+        self.num_decoder_TUs = num_decoder_TUs
+        self.hidden_dims = hidden_dims
         self.pvam = PVAM(
             in_channels=in_channels,
             char_num=self.char_num,
@@ -247,19 +250,17 @@ class SRN(nn.Layer):
             hidden_dims=self.hidden_dims)
         self.vsfd = VSFD(in_channels=in_channels)
 
-        #self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.pvam.wrap_encoder_for_feature.prepare_encoder.emb
-
     def forward(self, inputs, others):
-        encoder_word_pos = others["encoder_word_pos"]
-        gsrm_word_pos = others["gsrm_word_pos"]
-        gsrm_slf_attn_bias1 = others["gsrm_slf_attn_bias1"]
-        gsrm_slf_attn_bias2 = others["gsrm_slf_attn_bias2"]
+        encoder_word_pos = others[0]
+        gsrm_word_pos = others[1]
+        gsrm_slf_attn_bias1 = others[2]
+        gsrm_slf_attn_bias2 = others[3]
 
         pvam_feature = self.pvam(inputs, encoder_word_pos, gsrm_word_pos)
         gsrm_feature, word_out, gsrm_out = self.gsrm(
             pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,
             gsrm_slf_attn_bias2)
-        self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.pvam.wrap_encoder_for_feature.prepare_encoder.emb
+        #self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.pvam.wrap_encoder_for_feature.prepare_encoder.emb
 
         final_out = self.vsfd(pvam_feature, gsrm_feature)
 

@@ -27,6 +27,9 @@ class BaseRecLabelDecode(object):
         assert character_type in support_character_type, "Only {} are supported now but get {}".format(
             support_character_type, self.character_str)
 
+        self.beg_str = "sos"
+        self.end_str = "eos"
+
         if character_type == "en":
             self.character_str = "0123456789abcdefghijklmnopqrstuvwxyz"
             dict_character = list(self.character_str)
@@ -110,6 +113,8 @@ class CTCLabelDecode(BaseRecLabelDecode):
         if label is None:
             return text
         label = self.decode(label, is_remove_duplicate=False)
+        #print("text:", text)
+        #print("label:", label)
         return text, label
 
     def add_special_char(self, dict_character):
@@ -158,6 +163,51 @@ class AttnLabelDecode(BaseRecLabelDecode):
     def __call__(self, text):
         text = self.decode(text)
         return text
+
+    def get_ignored_tokens(self):
+        beg_idx = self.get_beg_end_flag_idx("beg")
+        end_idx = self.get_beg_end_flag_idx("end")
+        return [beg_idx, end_idx]
+
+    def get_beg_end_flag_idx(self, beg_or_end):
+        if beg_or_end == "beg":
+            idx = np.array(self.dict[self.beg_str])
+        elif beg_or_end == "end":
+            idx = np.array(self.dict[self.end_str])
+        else:
+            assert False, "unsupport type %s in get_beg_end_flag_idx" \
+                          % beg_or_end
+        return idx
+
+
+class SRNLabelDecode(BaseRecLabelDecode):
+    """ Convert between text-label and text-index """
+
+    def __init__(self,
+                 character_dict_path=None,
+                 character_type='en',
+                 use_space_char=False,
+                 **kwargs):
+        super(SRNLabelDecode, self).__init__(character_dict_path,
+                                             character_type, use_space_char)
+
+    def __call__(self, preds, label=None, *args, **kwargs):
+        pred = preds['predict']
+        if isinstance(preds, paddle.Tensor):
+            pred = preds.numpy()
+        # out = self.decode_preds(preds)
+
+        preds_idx = pred.argmax(axis=1)
+        preds_prob = pred.max(axis=1)
+        text = self.decode(preds_idx, preds_prob)
+        if label is None:
+            return text
+        label = self.decode(label, is_remove_duplicate=False)
+        return text, label
+
+    def add_special_char(self, dict_character):
+        dict_character = dict_character + [self.beg_str, self.end_str]
+        return dict_character
 
     def get_ignored_tokens(self):
         beg_idx = self.get_beg_end_flag_idx("beg")
