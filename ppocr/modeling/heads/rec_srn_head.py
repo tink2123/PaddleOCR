@@ -25,6 +25,8 @@ import numpy as np
 from self_attention import WrapEncoderForFeature
 from self_attention import WrapEncoder
 from paddle.static import Program
+from ppocr.modeling.backbones.rec_resnet_fpn import ResNetFPN
+from ppocr.modeling.heads.rec_resnet_fpn_st import ResNet
 gradient_clip = 10
 
 
@@ -298,7 +300,8 @@ if __name__ == "__main__":
                 fluid.default_main_program().random_seed = 10
                 dy_param_init_value = {}
                 np.random.seed(1333)
-                data_np = np.random.random((1, 512, 8, 32)).astype('float32')
+                #data_np = np.random.random((1, 512, 8, 32)).astype('float32')
+                data_np = np.random.random((1, 1, 64, 256)).astype('float32')
                 encoder_word_pos_np = np.random.random(
                     (1, 256, 1)).astype('int64')
                 pvam_feature_np = np.random.random(
@@ -329,13 +332,20 @@ if __name__ == "__main__":
                     "num_decoder_TUs": 4,
                     "hidden_dims": 512
                 }
-
+                backbone = ResNetFPN(in_channels=1)
+                for p in backbone.parameters():
+                    pass
+                    #print("dy param:{} {}".format(p.name, p.shape))
                 srn = SRN(in_channels=512, params=params)
+                for p in srn.parameters():
+                    print("dy param:{} {}".format(p.name, p.shape))
 
                 data = paddle.to_tensor(data_np)
-                predicts = srn(data, others)
+                feature = backbone(data)
+                print("backbone:", np.sum(feature.numpy()))
+                predicts = srn(feature, others)
 
-                #print("dy_result:", np.sum(predicts['predict'].numpy()))
+                print("dy_result:", np.sum(predicts['predict'].numpy()))
 
             with fluid.scope_guard(scope):
                 paddle.enable_static()
@@ -343,8 +353,10 @@ if __name__ == "__main__":
                 fluid.default_main_program().random_seed = 10
                 np.random.seed(1333)
 
+                #xyz = fluid.layers.data(
+                #    name='xyz', shape=[512, 8, 32], dtype='float32')
                 xyz = fluid.layers.data(
-                    name='xyz', shape=[512, 8, 32], dtype='float32')
+                    name='xyz', shape=[1, 64, 256], dtype='float32')
                 encoder_word_pos = fluid.layers.data(
                     "encoder_word_pos", shape=[256, 1], dtype="int64")
                 gsrm_word_pos = fluid.layers.data(
@@ -364,13 +376,16 @@ if __name__ == "__main__":
                     "gsrm_slf_attn_bias1": gsrm_slf_attn_bias1,
                     "gsrm_slf_attn_bias2": gsrm_slf_attn_bias2
                 }
+                resnet = ResNet(params)
+                #for p in resnet.parameters():
+                #    print(p.name)
                 srn = SRNPredict(params)
-                out = srn(xyz, others)
+                feature = resnet(xyz)
+                print("feature:", feature)
+                out = srn(feature, others)
                 place = fluid.CPUPlace()
                 exe = fluid.Executor(place)
                 exe.run(fluid.default_startup_program())
-                #for param in fluid.default_startup_program().all_parameters():
-                #    print(param.name)
                 #param_list = ["tmp_2", "tmp_4","tmp_8","tmp_11","tmp_14", "tmp_17", "tmp_21","tmp_24", "tmp_27", "tmp_30"]
                 """
                 param_list = ["layer_norm_7.tmp_2", "dropout_15.tmp_0", "tmp_10",
@@ -381,10 +396,14 @@ if __name__ == "__main__":
                               "layer_norm_13.tmp_2", "layer_norm_14.tmp_2", "dropout_28.tmp_0", "tmp_20"
                               ]
                 """
-                param_list = ["tmp_31"]
+                param_list = [
+                    "xyz", "bn_conv1.output.1.tmp_3",
+                    "res5c.add.output.5.tmp_1", "conv2d_4.tmp_1",
+                    "res4f.add.output.5.tmp_1", "res3d.add.output.5.tmp_1"
+                ]
                 #for param in fluid.default_startup_program().global_block().all_parameters():
-                #    print(param.name)
-                ret = exe.run(fetch_list=[out['predict']] + param_list,
+                #    print("st param: {} {}".format(param.name, param.shape))
+                ret = exe.run(fetch_list=[out['predict'], feature] + param_list,
                               feed={
                                   'xyz': data_np,
                                   'encoder_word_pos': encoder_word_pos_np,
