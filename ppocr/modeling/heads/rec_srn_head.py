@@ -239,6 +239,7 @@ class SRN(nn.Layer):
             num_heads=self.num_heads,
             num_encoder_tus=self.num_encoder_TUs,
             hidden_dims=self.hidden_dims)
+
         self.gsrm = GSRM(
             in_channels=in_channels,
             char_num=self.char_num,
@@ -249,7 +250,12 @@ class SRN(nn.Layer):
             hidden_dims=self.hidden_dims)
         self.vsfd = VSFD(in_channels=in_channels)
 
-        #self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.pvam.wrap_encoder_for_feature.prepare_encoder.emb
+        #self.pvam.wrap_encoder_for_feature.prepare_encoder.emb = self.gsrm.wrap_encoder0.prepare_decoder.emb0
+
+        #self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.pvam.wrap_encoder_for_feature.prepare_encoder.emb
+        self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
+
+        #self.gsrm.wrap_encoder0.prepare_decoder.emb1 = self.gsrm.wrap_encoder1.prepare_decoder.emb0
 
     def forward(self, inputs, others):
         encoder_word_pos = others["encoder_word_pos"]
@@ -261,7 +267,7 @@ class SRN(nn.Layer):
         gsrm_feature, word_out, gsrm_out = self.gsrm(
             pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,
             gsrm_slf_attn_bias2)
-        self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.pvam.wrap_encoder_for_feature.prepare_encoder.emb
+        #self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.pvam.wrap_encoder_for_feature.prepare_encoder.emb
 
         final_out = self.vsfd(pvam_feature, gsrm_feature)
 
@@ -337,8 +343,13 @@ if __name__ == "__main__":
                     pass
                     #print("dy param:{} {}".format(p.name, p.shape))
                 srn = SRN(in_channels=512, params=params)
-                for p in srn.parameters():
-                    print("dy param:{} {}".format(p.name, p.shape))
+                #for p in srn.parameters():
+                #    print("dy param:{} {}".format(p.name, p.shape))
+
+                restore = np.load("../../../train_data/dy_param.npz")
+                state_dict = backbone.state_dict()
+                #for k, v in state_dict.items():
+                backbone.set_dict(restore, use_structured_name=True)
 
                 data = paddle.to_tensor(data_np)
                 feature = backbone(data)
