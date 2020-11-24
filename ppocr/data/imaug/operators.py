@@ -109,6 +109,8 @@ class KeepKeys(object):
         #print("keep keys:", self.keep_keys)
         for key in self.keep_keys:
             data_list.append(data[key])
+            #print("key:", key)
+            #print("data_list:",data_list)
         return data_list
 
 

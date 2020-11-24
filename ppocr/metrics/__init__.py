@@ -24,9 +24,9 @@ __all__ = ['build_metric']
 
 def build_metric(config):
     from .det_metric import DetMetric
-    from .rec_metric import RecMetric
+    from .rec_metric import RecMetric, SRNMetric
 
-    support_dict = ['DetMetric', 'RecMetric']
+    support_dict = ['DetMetric', 'RecMetric', 'SRNMetric']
 
     config = copy.deepcopy(config)
     module_name = config.pop('name')

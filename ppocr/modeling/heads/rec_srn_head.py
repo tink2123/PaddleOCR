@@ -68,17 +68,22 @@ class PVAM(nn.Layer):
             in_features=in_channels, out_features=1, bias_attr=False)
 
     def forward(self, inputs, encoder_word_pos, gsrm_word_pos):
+        #print("encoder_word_pos_shape:", encoder_word_pos.shape)
+        #print("gsrm_word_pos:", gsrm_word_pos.shape)
         b, c, h, w = inputs.shape
         conv_features = paddle.reshape(inputs, shape=[-1, c, h * w])
         conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])
         # transformer encoder
+        #print("transformer encoder")
         b, t, c = conv_features.shape
         #print("conv shape:", conv_features.shape)
         #print("encoder word pos:", encoder_word_pos.shape)
 
         enc_inputs = [conv_features, encoder_word_pos, None]
+        #print("conv featres:", conv_features.shape)
+        #print("encoder word pos:", encoder_word_pos.shape)
         word_features = self.wrap_encoder_for_feature(enc_inputs)
-
+        #print("after word_features")
         # pvam
         [b, t, c] = word_features.shape
         #word_features = self.flatten0(word_features)
@@ -249,18 +254,18 @@ class SRNHead(nn.Layer):
             num_decoder_tus=self.num_decoder_TUs,
             hidden_dims=self.hidden_dims)
         self.vsfd = VSFD(in_channels=in_channels)
-
+        self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
     def forward(self, inputs, others):
         encoder_word_pos = others[0]
         gsrm_word_pos = others[1]
         gsrm_slf_attn_bias1 = others[2]
         gsrm_slf_attn_bias2 = others[3]
-
+        #print("before pvam")
         pvam_feature = self.pvam(inputs, encoder_word_pos, gsrm_word_pos)
+        #print("before gsrm")
         gsrm_feature, word_out, gsrm_out = self.gsrm(
             pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,
             gsrm_slf_attn_bias2)
-        #self.gsrm.wrap_encoder0.prepare_decoder.emb0 = self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.pvam.wrap_encoder_for_feature.prepare_encoder.emb
 
         final_out = self.vsfd(pvam_feature, gsrm_feature)
 

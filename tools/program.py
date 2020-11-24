@@ -175,6 +175,8 @@ def train(config,
     best_model_dict = {main_indicator: 0}
     best_model_dict.update(pre_best_model_dict)
     train_stats = TrainingStats(log_smooth_window, ['lr'])
+    #restore = np.load("./dy_param.npz")
+    #model.set_dict(restore, use_structured_name=False)
     model.train()
 
     if 'start_epoch' in best_model_dict:
@@ -195,6 +197,8 @@ def train(config,
             others = batch[-4:]
             #print(others)
             preds = model(images, others)
+            #for p in model.parameters():
+            #    print("dy_parameters:{} {}".format(p.name, p.shape))
             loss = loss_class(preds, batch)
             #print("loss:", loss)
             avg_loss = loss['loss']
@@ -308,8 +312,9 @@ def eval(model, valid_dataloader, post_process_class, eval_class):
             if idx >= len(valid_dataloader):
                 break
             images = batch[0]
+            others = batch[-4:]
             start = time.time()
-            preds = model(images)
+            preds = model(images, others)
 
             batch = [item.numpy() for item in batch]
             # Obtain usable results from post-processing methods

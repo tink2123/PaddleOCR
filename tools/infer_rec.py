@@ -60,7 +60,7 @@ def main():
         elif op_name in ['RecResizeImg']:
             op[op_name]['infer_mode'] = True
         elif op_name == 'KeepKeys':
-            op[op_name]['keep_keys'] = ['image']
+            op[op_name]['keep_keys'] = ['image', 'encoder_word_pos', 'gsrm_word_pos', 'gsrm_slf_attn_bias1', 'gsrm_slf_attn_bias2']
         transforms.append(op)
     global_config['infer_mode'] = True
     ops = create_operators(transforms, global_config)
@@ -72,13 +72,23 @@ def main():
             img = f.read()
             data = {'image': img}
         batch = transform(data, ops)
+        encoder_word_pos_list = np.expand_dims(batch[1], axis=0)
+        gsrm_word_pos_list = np.expand_dims(batch[2], axis=0)
+        gsrm_slf_attn_bias1_list = np.expand_dims(batch[3], axis=0)
+        gsrm_slf_attn_bias2_list = np.expand_dims(batch[4], axis=0)
 
+
+        others = [paddle.to_tensor(encoder_word_pos_list),
+                  paddle.to_tensor(gsrm_word_pos_list),
+                  paddle.to_tensor(gsrm_slf_attn_bias1_list),
+                  paddle.to_tensor(gsrm_slf_attn_bias2_list)]
         images = np.expand_dims(batch[0], axis=0)
         images = paddle.to_tensor(images)
-        preds = model(images)
+        preds = model(images, others)
         post_result = post_process_class(preds)
-        for rec_reuslt in post_result:
-            logger.info('\t result: {}'.format(rec_reuslt))
+        logger.info('\t result: {}'.format(post_result[-1]))
+        #for rec_reuslt in post_result:
+        #    logger.info('\t result: {}'.format(rec_reuslt))
     logger.info("success!")
 
 

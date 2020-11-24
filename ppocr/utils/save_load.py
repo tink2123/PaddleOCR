@@ -22,6 +22,7 @@ import pickle
 import six
 
 import paddle
+import numpy as np
 
 __all__ = ['init_model', 'save_model', 'load_dygraph_pretrain']
 
@@ -119,6 +120,8 @@ def init_model(config, model, logger, optimizer=None, lr_scheduler=None):
                 pretrained_model))
     else:
         logger.info('train from scratch')
+    restore = np.load("./dy_param.npz")
+    model.set_dict(restore, use_structured_name=False)
     return best_model_dict
 
 

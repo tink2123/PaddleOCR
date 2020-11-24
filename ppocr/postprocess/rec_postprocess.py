@@ -65,10 +65,13 @@ class BaseRecLabelDecode(object):
         """ convert text-index into text-label. """
         result_list = []
         ignored_tokens = self.get_ignored_tokens()
+        #print("ignored_tokens:", ignored_tokens)
         batch_size = len(text_index)
+        char_list = []
+        conf_list = []
         for batch_idx in range(batch_size):
-            char_list = []
-            conf_list = []
+            #char_list = []
+            #conf_list = []
             for idx in range(len(text_index[batch_idx])):
                 if text_index[batch_idx][idx] in ignored_tokens:
                     continue
@@ -80,10 +83,12 @@ class BaseRecLabelDecode(object):
                 char_list.append(self.character[int(text_index[batch_idx][
                     idx])])
                 if text_prob is not None:
+                    print("conf:",text_prob[batch_idx][idx].numpy())
                     conf_list.append(text_prob[batch_idx][idx])
                 else:
                     conf_list.append(1)
             text = ''.join(char_list)
+            #print("text:", text)
             result_list.append((text, conf_list))
         return result_list
 
@@ -196,9 +201,10 @@ class SRNLabelDecode(BaseRecLabelDecode):
         if isinstance(preds, paddle.Tensor):
             pred = preds.numpy()
         # out = self.decode_preds(preds)
-
         preds_idx = pred.argmax(axis=1)
         preds_prob = pred.max(axis=1)
+        end_pos = np.where(preds_idx.numpy() != 37)[0]
+        preds_idx = preds_idx[:int(end_pos[-1])+1]
         text = self.decode(preds_idx, preds_prob)
         if label is None:
             return text

@@ -218,10 +218,12 @@ class MultiHeadAttention(nn.Layer):
         q = paddle.reshape(x=q, shape=[0, c, self.n_head, self.d_key])
         q = paddle.transpose(x=q, perm=[0, 2, 1, 3])
 
-        if cache is not None and static_kv and "static_k" in cache:
-            # for encoder-decoder attention in inference and has cached
-            k = cache["static_k"]
-            v = cache["static_v"]
+        #if cache is not None and static_kv and "static_k" in cache:
+        if cache is not None and static_kv:
+            if "static_k" in cache:
+                # for encoder-decoder attention in inference and has cached
+                k = cache["static_k"]
+                v = cache["static_v"]
         else:
             k = self.k_fc(keys)
             v = self.v_fc(values)

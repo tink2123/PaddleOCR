@@ -47,10 +47,18 @@ class Model(paddle.nn.Layer):
     # Please modify the 'shape' according to actual needs
     @to_static(input_spec=[
         paddle.static.InputSpec(
-            shape=[None, 3, 640, 640], dtype='float32')
+            shape=[None, 1, 64, 256], dtype='float32'),
+        [ paddle.static.InputSpec(
+                    shape=[None, 256, 1], dtype="int64"),
+        paddle.static.InputSpec(
+                    shape=[None, 25, 1], dtype="int64"),
+        paddle.static.InputSpec(
+                    shape=[None, 8, 25, 25], dtype="int64"),
+        paddle.static.InputSpec(
+                    shape=[None, 8, 25, 25], dtype="int64")]
     ])
-    def forward(self, inputs):
-        x = self.pre_model(inputs)
+    def forward(self, inputs, data):
+        x = self.pre_model(inputs, data)
         return x
 
 

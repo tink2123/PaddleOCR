@@ -2,14 +2,14 @@ Global:
   use_gpu: false
   epoch_num: 72
   log_smooth_window: 20
-  print_batch_step: 10
+  print_batch_step: 5
   save_model_dir: ./output/rec/mv3_none_bilstm_ctc/
   save_epoch_step: 3
   # evaluation is run every 5000 iterations after the 4000th iteration
-  eval_batch_step: [0, 2000]
+  eval_batch_step: [0, 5000]
   # if pretrained_model is saved in static mode, load_static_weights must set to True
   cal_metric_during_train: True
-  pretrained_model:
+  pretrained_model: 
   checkpoints:
   save_inference_dir:
   use_visualdl: False
@@ -24,14 +24,14 @@ Global:
 
 
 Optimizer:
-  name: ModelAverage
+  name: Adam
   beta1: 0.9
   beta2: 0.999
   lr:
+    name: Cosine
+    warmup_epoch: 0
+    step_each_epoch: 256
     learning_rate: 0.0001
-  average_window:
-  min_average_window:
-  max_average_window:
   regularizer:
     name: 'L2'
     factor: 0
@@ -57,7 +57,7 @@ PostProcess:
   name: SRNLabelDecode
 
 Metric:
-  name: RecMetric
+  name: SRNMetric
   main_indicator: acc
 
 Train:
@@ -81,26 +81,33 @@ Train:
                       'gsrm_slf_attn_bias1',
                       'gsrm_slf_attn_bias2'] # dataloader will return list in this order
   loader:
-    shuffle: False
+    shuffle: True
     batch_size_per_card: 1
     drop_last: True
-    num_workers: 8
+    num_workers: 1
 
 Eval:
   dataset:
-    name: LMDBDateSet
-    data_dir: ./train_data/data_lmdb_release/validation/
+    name: SimpleDataSet
+    data_dir: ./train_data/ic15_data/
+    label_file_list: ["./train_data/ic15_data/1.txt"]
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
           channel_first: False
-      - CTCLabelEncode: # Class handling label
+      - SRNLabelEncode: # Class handling label
       - SRNRecResizeImg:
           image_shape: [1, 64, 256]
       - KeepKeys:
-          keep_keys: ['image', 'label', 'length'] # dataloader will return list in this order
+          keep_keys: ['image',
+                      'label',
+                      'length',
+                      'encoder_word_pos',
+                      'gsrm_word_pos',
+                      'gsrm_slf_attn_bias1',
+                      'gsrm_slf_attn_bias2'] 
   loader:
     shuffle: False
     drop_last: False
-    batch_size_per_card: 256
+    batch_size_per_card: 1
     num_workers: 4
