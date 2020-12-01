@@ -27,6 +27,7 @@ from self_attention import WrapEncoder
 from paddle.static import Program
 from ppocr.modeling.backbones.rec_resnet_fpn import ResNetFPN
 from ppocr.modeling.heads.rec_resnet_fpn_st import ResNet
+import paddle.fluid.framework as framework
 gradient_clip = 10
 
 
@@ -156,7 +157,7 @@ class GSRM(nn.Layer):
         b, t, c = inputs.shape
         pvam_features = paddle.reshape(inputs, [-1, c])
         word_out = self.fc0(pvam_features)
-        word_out = F.softmax(word_out)
+        #word_out = F.softmax(word_out)
         word_ids = paddle.argmax(word_out, axis=1)
         word_ids = paddle.reshape(x=word_ids, shape=[-1, t, 1])
 
@@ -190,7 +191,7 @@ class GSRM(nn.Layer):
 
         b, t, c = gsrm_out.shape
         gsrm_out = paddle.reshape(gsrm_out, [-1, c])
-        gsrm_out = F.softmax(x=gsrm_out)
+        #gsrm_out = F.softmax(x=gsrm_out)
 
         return gsrm_features, word_out, gsrm_out
 
@@ -218,7 +219,7 @@ class VSFD(nn.Layer):
         img_comb_feature = paddle.reshape(combine_feature, shape=[-1, c1])
 
         out = self.fc1(img_comb_feature)
-        out = F.softmax(out)
+        #out = F.softmax(out)
         return out
 
 
@@ -282,6 +283,35 @@ class SRN(nn.Layer):
         return predicts
 
 
+class SRNLoss(nn.Layer):
+    def __init__(self, params):
+        super(SRNLoss, self).__init__()
+        self.char_num = params['char_num']
+        self.loss_func = paddle.nn.CrossEntropyLoss(reduction="none")
+
+    def forward(self, predicts, others):
+        predict = predicts['predict']
+        word_predict = predicts['word_out']
+        gsrm_predict = predicts['gsrm_out']
+        label = others['label']
+        #lbl_weight = others['lbl_weight']
+
+        casted_label = paddle.cast(x=label, dtype='int64')
+        label = paddle.reshape(label, shape=[-1, 1])
+        cost_word = self.loss_func(word_predict, label=label)
+        label = paddle.reshape(label, shape=[-1])
+        print("label:", label.numpy())
+        print("cost_word:", np.sum(cost_word.numpy()))
+        cost_gsrm = self.loss_func(gsrm_predict, label=casted_label)
+        cost_vsfd = self.loss_func(predict, label=casted_label)
+
+        #sum_cost = paddle.sum([cost_word, cost_vsfd * 2.0, cost_gsrm * 0.15])
+        #sum_cost = cost_word + cost_vsfd * 2.0 + cost_gsrm * 0.15
+        sum_cost = cost_gsrm
+        #return [sum_cost, cost_vsfd, cost_word]
+        return sum_cost
+
+
 if __name__ == "__main__":
 
     import numpy as np
@@ -317,14 +347,19 @@ if __name__ == "__main__":
                     (1, 8, 25, 25)).astype('float32')
                 gsrm_slf_attn_bias2_np = np.random.random(
                     (1, 8, 25, 25)).astype('float32')
+                label_np = np.array(range(0, 25)).astype('int64')
 
                 encoder_word_pos = paddle.to_tensor(encoder_word_pos_np)
                 pvam_features = paddle.to_tensor(pvam_feature_np)
                 gsrm_word_pos = paddle.to_tensor(gsrm_word_pos_np)
                 gsrm_slf_attn_bias1 = paddle.to_tensor(gsrm_slf_attn_bias1_np)
                 gsrm_slf_attn_bias2 = paddle.to_tensor(gsrm_slf_attn_bias2_np)
+                label = paddle.to_tensor(label_np)
+                label = paddle.reshape(label, shape=[-1, 1])
+                #print(label)
 
                 others = {
+                    "label": label,
                     "encoder_word_pos": encoder_word_pos,
                     "gsrm_word_pos": gsrm_word_pos,
                     "gsrm_slf_attn_bias1": gsrm_slf_attn_bias1,
@@ -349,20 +384,31 @@ if __name__ == "__main__":
                 restore = np.load("../../../train_data/dy_param.npz")
                 state_dict = backbone.state_dict()
                 #for k, v in state_dict.items():
-                backbone.set_dict(restore, use_structured_name=True)
+                backbone.set_dict(restore, use_structured_name=False)
+                srn.set_dict(restore, use_structured_name=False)
 
                 data = paddle.to_tensor(data_np)
                 feature = backbone(data)
                 print("backbone:", np.sum(feature.numpy()))
                 predicts = srn(feature, others)
+                word_predict_dy = predicts['predict']
+                print("predict shape:", word_predict_dy.shape)
+                print("mean predict:", np.mean(word_predict_dy.numpy()))
+                print("predict:", np.argmax(word_predict_dy.numpy(), axis=1))
 
-                print("dy_result:", np.sum(predicts['predict'].numpy()))
+                Loss = SRNLoss(params)
+
+                loss = Loss(predicts, others)
+                #print(loss[-1].numpy())
+
+                #print("dy_result:", np.sum(predicts['predict'].numpy()))
 
             with fluid.scope_guard(scope):
                 paddle.enable_static()
                 fluid.default_startup_program().random_seed = 10
                 fluid.default_main_program().random_seed = 10
                 np.random.seed(1333)
+                label_np = np.array(range(0, 25)).astype('int64')
 
                 #xyz = fluid.layers.data(
                 #    name='xyz', shape=[512, 8, 32], dtype='float32')
@@ -380,23 +426,60 @@ if __name__ == "__main__":
                     name="gsrm_slf_attn_bias2",
                     shape=[8, 25, 25],
                     dtype="float32")
+                label_st = fluid.layers.data(
+                    name="label", shape=[25], dtype="int64")
 
                 others = {
                     "encoder_word_pos": encoder_word_pos,
                     "gsrm_word_pos": gsrm_word_pos,
                     "gsrm_slf_attn_bias1": gsrm_slf_attn_bias1,
-                    "gsrm_slf_attn_bias2": gsrm_slf_attn_bias2
+                    "gsrm_slf_attn_bias2": gsrm_slf_attn_bias2,
                 }
                 resnet = ResNet(params)
                 #for p in resnet.parameters():
                 #    print(p.name)
                 srn = SRNPredict(params)
                 feature = resnet(xyz)
-                print("feature:", feature)
+                #print("feature:", feature)
                 out = srn(feature, others)
+
+                label_st = fluid.layers.reshape(label_st, shape=[25, 1])
+
+                word_predict = out["gsrm_out"]
+                #print(word_predict.shape)
+                print("label shape:", label_st.shape)
+
+                #casted_label = fluid.layers.cast(x=label_st, dtype='int64')
+                cost_word = fluid.layers.cross_entropy(
+                    input=word_predict, label=label_st)
+                #cost_word = fluid.layers.reshape(x=fluid.layers.reduce_sum(cost_word), shape=[1])
+
                 place = fluid.CPUPlace()
                 exe = fluid.Executor(place)
                 exe.run(fluid.default_startup_program())
+                main_program = framework.default_main_program()
+                dy_dict = {}
+                restore = np.load("../../../train_data/dy_param.npz")
+                i = 0
+                for k, v in restore.items():
+                    dy_dict[i] = v
+                    i += 1
+                st_dict = {}
+                j = 0
+                for p in main_program.all_parameters():
+                    st_dict[p.name] = dy_dict[j]
+                    j += 1
+
+                for var in main_program.list_vars():
+                    try:
+                        ten = paddle.fluid.global_scope().find_var(
+                            var.name).get_tensor()
+                    except:
+                        continue
+                    ten.set(st_dict[var.name], place)
+
+                #fluid.load(main_program, "../../../train_data/best_accuracy.pdparams", exe)
+
                 #param_list = ["tmp_2", "tmp_4","tmp_8","tmp_11","tmp_14", "tmp_17", "tmp_21","tmp_24", "tmp_27", "tmp_30"]
                 """
                 param_list = ["layer_norm_7.tmp_2", "dropout_15.tmp_0", "tmp_10",
@@ -414,17 +497,28 @@ if __name__ == "__main__":
                 ]
                 #for param in fluid.default_startup_program().global_block().all_parameters():
                 #    print("st param: {} {}".format(param.name, param.shape))
-                ret = exe.run(fetch_list=[out['predict'], feature] + param_list,
+                ret = exe.run(fetch_list=[
+                    out['predict'], feature, cost_word, word_predict, "label"
+                ] + param_list,
                               feed={
                                   'xyz': data_np,
+                                  'label': label_np,
                                   'encoder_word_pos': encoder_word_pos_np,
                                   'gsrm_word_pos': gsrm_word_pos_np,
                                   'gsrm_slf_attn_bias1': gsrm_slf_attn_bias1_np,
                                   'gsrm_slf_attn_bias2': gsrm_slf_attn_bias2_np
                               })
-                print("st_result:", np.sum(ret[0]))
-                for item in ret[1:]:
-                    print("st tmp:", np.sum(item))
+                #print("backbone:", ret[1])
+                print("mean predict:", np.mean(ret[3]))
+                print("predict:", np.argmax(ret[3], axis=1))
+                print("lable:", ret[4])
+                print("loss:", np.sum(ret[2]))
+
+                if word_predict_dy == ret[3]:
+                    print("Predict is equal")
+
+                #for item in ret[1:]:
+                #    print("st tmp:", np.sum(item))
                 #print("emb2 weights:", np.sum(ret[-2]))
 
     unittest.main()

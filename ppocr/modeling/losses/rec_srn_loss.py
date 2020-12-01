@@ -31,13 +31,14 @@ class SRNLoss(nn.Layer):
         word_predict = predicts['word_out']
         gsrm_predict = predict['gsrm_out']
         label = others['label']
-        lbl_weight = others['lbl_weight']
+        #lbl_weight = others['lbl_weight']
 
         casted_label = paddle.cast(x=label, dtype='int64')
         cost_word = self.loss_func(word_predict, label=casted_label)
         cost_gsrm = self.loss_func(gsrm_predict, label=casted_label)
         cost_vsfd = self.loss_func(predict, label=casted_label)
 
-        sum_cost = paddle.sum([cost_word, cost_vsfd * 2.0, cost_gsrm * 0.15])
+        #sum_cost = paddle.sum([cost_word, cost_vsfd * 2.0, cost_gsrm * 0.15])
+        sum_cost = cost_word + cost_vsfd * 2.0 + cost_gsrm * 0.15
 
         return [sum_cost, cost_vsfd, cost_word]
