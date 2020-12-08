@@ -124,11 +124,11 @@ class SRNPredict(object):
         b, t, c = pvam_features.shape
         word_out = fluid.layers.fc(
             input=fluid.layers.reshape(pvam_features, [-1, c]),
-            size=self.char_num,
-            act="softmax")
+            size=self.char_num)
+
         #word_out.stop_gradient = True
         word_ids = fluid.layers.argmax(word_out, axis=1)
-        word_ids.stop_gradient = True
+        #word_ids.stop_gradient = True
         word_ids = fluid.layers.reshape(x=word_ids, shape=[-1, t, 1])
 
         #===== GSRM Semantic reasoning block =====
@@ -155,8 +155,8 @@ class SRNPredict(object):
             return word1, word2
 
         word1, word2 = prepare_bi(word_ids)
-        word1.stop_gradient = True
-        word2.stop_gradient = True
+        word1.stop_gradient = False
+        word2.stop_gradient = False
         enc_inputs_1 = [word1, gsrm_word_pos, gsrm_slf_attn_bias1]
         enc_inputs_2 = [word2, gsrm_word_pos, gsrm_slf_attn_bias2]
 
@@ -206,8 +206,9 @@ class SRNPredict(object):
                 "src_word_emb_table"),
             transpose_y=True)
         b, t, c = gsrm_out.shape
-        gsrm_out = fluid.layers.softmax(input=fluid.layers.reshape(gsrm_out,
-                                                                   [-1, c]))
+        #gsrm_out = fluid.layers.softmax(input=fluid.layers.reshape(gsrm_out,
+        #                                                           [-1, c]))
+        gsrm_out = fluid.layers.reshape(gsrm_out, [-1, c])
 
         return gsrm_features, word_out, gsrm_out
 
@@ -222,6 +223,8 @@ class SRNPredict(object):
         #===== Visual-Semantic Fusion Decoder Module =====
         b, t, c1 = pvam_features.shape
         b, t, c2 = gsrm_features.shape
+        print("pvam_features:", pvam_features)
+        print("gsrm_features:", gsrm_features)
         combine_features_ = fluid.layers.concat(
             [pvam_features, gsrm_features], axis=2)
         img_comb_features_ = fluid.layers.reshape(
@@ -236,9 +239,7 @@ class SRNPredict(object):
         img_comb_features = fluid.layers.reshape(
             x=combine_features, shape=[-1, c1])
 
-        fc_out = fluid.layers.fc(input=img_comb_features,
-                                 size=self.char_num,
-                                 act="softmax")
+        fc_out = fluid.layers.fc(input=img_comb_features, size=self.char_num)
         return fc_out
 
     def __call__(self, inputs, others, mode=None):
@@ -246,12 +247,14 @@ class SRNPredict(object):
         pvam_features = self.pvam(inputs, others)
 
         gsrm_features, word_out, gsrm_out = self.gsrm(pvam_features, others)
+        print("pvam_features:", pvam_features)
         final_out = self.vsfd(pvam_features, gsrm_features)
-
-        print(final_out)
+        #final_out = gsrm_out
+        #print(final_out)
 
         _, decoded_out = fluid.layers.topk(input=final_out, k=1)
         predicts = {
+            'pvam_feature': pvam_features,
             'predict': final_out,
             'decoded_out': decoded_out,
             'word_out': word_out,

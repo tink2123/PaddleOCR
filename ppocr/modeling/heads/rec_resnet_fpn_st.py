@@ -72,7 +72,6 @@ class ResNet():
             stride=2,
             act='relu',
             name="conv1")
-        print("first conv:", conv)
         F = []
         if layers >= 50:
             for block in range(len(depth)):
@@ -126,7 +125,7 @@ class ResNet():
                     bias_attr=w_nolr)
                 base = fluid.layers.batch_norm(
                     base, act="relu", param_attr=w_nolr, bias_attr=w_nolr)
-            print("base,", base)
+            #print("base,", base)
             base = fluid.layers.concat([base, F[i]], axis=1)
             base = fluid.layers.conv2d(
                 base,
@@ -150,6 +149,8 @@ class ResNet():
             filter_size=1,
             bias_attr=w_nolr,
             param_attr=w_nolr)
+
+        print("feature:", base)
 
         return base
 

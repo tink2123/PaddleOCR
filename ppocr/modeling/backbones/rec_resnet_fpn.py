@@ -187,9 +187,8 @@ class ResNetFPN(nn.Layer):
         self.out_channels = 512
 
     def __call__(self, x):
-        print("input:", np.sum(x.numpy()))
+        #print("input:", np.sum(x.numpy()))
         x = self.conv(x)
-        print("first conv:", np.sum(x.numpy()))
         fpn_list = []
         F = []
         for i in range(len(self.depth)):
@@ -201,6 +200,7 @@ class ResNetFPN(nn.Layer):
                 if i + 1 == number:
                     F.append(x)
         base = F[-1]
+        first_conv = base
         j = 0
         for i, block in enumerate(self.base_block):
             if i % 3 == 0 and i < 6:
@@ -213,7 +213,7 @@ class ResNetFPN(nn.Layer):
                     base = self.bn_block[j - 1](base)
                 base = paddle.concat([base, F[-j - 1]], axis=1)
             base = block(base)
-        return base
+        return base, first_conv
 
 
 class ConvBNLayer(nn.Layer):
@@ -240,9 +240,9 @@ class ConvBNLayer(nn.Layer):
             bias_attr=False, )
         #print("num_filter:{} stride:{}, filter_size:{}, groups:{}".format(out_channels, stride, kernel_size, groups))
         if name == "conv1":
-            print("Name == conv1")
+            #print("Name == conv1")
             bn_name = "bn_" + name
-            print(bn_name)
+            #print(bn_name)
         else:
             bn_name = "bn" + name[3:]
         self.bn = nn.BatchNorm(

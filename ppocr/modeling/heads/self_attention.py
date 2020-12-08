@@ -51,7 +51,8 @@ class WrapEncoderForFeature(nn.Layer):
             d_model,
             max_length,
             prepostprocess_dropout,
-            bos_idx=bos_idx)
+            bos_idx=bos_idx,
+            word_emb_param_name="src_word_emb_table")
         self.encoder = Encoder(n_layer, n_head, d_key, d_value, d_model,
                                d_inner_hid, prepostprocess_dropout,
                                attention_dropout, relu_dropout, preprocess_cmd,
@@ -100,9 +101,9 @@ class WrapEncoder(nn.Layer):
 
     def forward(self, enc_inputs):
         src_word, src_pos, src_slf_attn_bias = enc_inputs
-        enc_input = self.prepare_decoder(src_word, src_pos)
+        enc_input, gradient = self.prepare_decoder(src_word, src_pos)
         enc_output = self.encoder(enc_input, src_slf_attn_bias)
-        return enc_output
+        return enc_output, gradient
 
 
 class Encoder(nn.Layer):
@@ -372,6 +373,7 @@ class PrepareDecoder(nn.Layer):
         src_word = paddle.squeeze(src_word, axis=-1)
         src_word_emb = self.emb0(src_word)
         src_word_emb = paddle.scale(x=src_word_emb, scale=self.src_emb_dim**0.5)
+        gradient = src_word_emb
         src_pos = paddle.squeeze(src_pos, axis=-1)
         src_pos_enc = self.emb1(src_pos)
         src_pos_enc.stop_gradient = True
@@ -381,7 +383,7 @@ class PrepareDecoder(nn.Layer):
                 x=enc_input, p=self.dropout_rate, mode="downscale_in_infer")
         else:
             out = enc_input
-        return out
+        return out, gradient
 
 
 class FFN(nn.Layer):
@@ -392,7 +394,6 @@ class FFN(nn.Layer):
     def __init__(self, d_inner_hid, d_model, dropout_rate):
         super(FFN, self).__init__()
         self.dropout_rate = dropout_rate
-        self.flatten = paddle.nn.Flatten(start_axis=1, stop_axis=2)
         self.fc1 = paddle.nn.Linear(
             in_features=d_model, out_features=d_inner_hid)
         self.fc2 = paddle.nn.Linear(
