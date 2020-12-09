@@ -72,6 +72,7 @@ class ResNet():
             stride=2,
             act='relu',
             name="conv1")
+        print("first conv:", conv)
         F = []
         if layers >= 50:
             for block in range(len(depth)):
@@ -149,8 +150,6 @@ class ResNet():
             filter_size=1,
             bias_attr=w_nolr,
             param_attr=w_nolr)
-
-        print("feature:", base)
 
         return base
 

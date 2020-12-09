@@ -244,6 +244,7 @@ class SRNPredict(object):
 
     def __call__(self, inputs, others, mode=None):
 
+        print("inputs:", inputs)
         pvam_features = self.pvam(inputs, others)
 
         gsrm_features, word_out, gsrm_out = self.gsrm(pvam_features, others)

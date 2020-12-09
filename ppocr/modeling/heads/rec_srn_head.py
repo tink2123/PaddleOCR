@@ -195,7 +195,7 @@ class GSRM(nn.Layer):
         gsrm_out = paddle.reshape(gsrm_out, [-1, c])
         #gsrm_out = F.softmax(x=gsrm_out)
 
-        return gsrm_features, word_out, gsrm_out, pvam_features
+        return gsrm_features, word_out, gsrm_out, gsrm_features
         #return word_out
 
 
@@ -287,7 +287,7 @@ class SRN(nn.Layer):
             'decoded_out': decoded_out,
             'word_out': word_out,
             'gsrm_out': gsrm_out,
-            'gradient': gradient
+            'gradient': inputs
         }
 
         return predicts
@@ -436,7 +436,7 @@ if __name__ == "__main__":
                 sgd = fluid.optimizer.SGDOptimizer(
                     learning_rate=0.001,
                     parameter_list=srn.parameters() + backbone.parameters())
-                for i in range(1):
+                for i in range(100):
                     feature, x = backbone(data)
                     #print("backbone:", np.sum(feature.numpy()))
                     predicts = srn(feature, others)
@@ -445,20 +445,24 @@ if __name__ == "__main__":
                     gsrm_out = predicts["gsrm_out"]
 
                     #print("pvam_features:", np.sum(pvam_features.numpy()))
-                    print("gsrm out:", np.sum(np.abs(gsrm_out.numpy())))
+                    #print("gsrm out:", np.sum(np.abs(gsrm_out.numpy())))
                     #print("predict shape:", word_predict_dy.shape)
                     #print("mean predict:", np.mean(word_predict_dy.numpy()))
-                    #print("predict:", np.argmax(word_predict_dy.numpy(), axis=1))
+                    print(
+                        "pvam predict:",
+                        np.argmax(
+                            word_predict_dy.numpy(), axis=1))
+                    print("gsrm predict:", np.argmax(gsrm_out.numpy(), axis=1))
 
                     Loss = SRNLoss(params)
                     loss = Loss(predicts, others)
                     loss.backward()
-                    #print("forward:", np.sum(np.abs(feature.numpy())))
-                    #print("gradient:", np.sum(np.abs(feature.gradient())))
-                    print("forward2:",
-                          np.sum(np.abs(predicts['gradient'].numpy())))
-                    print("gradient2:",
-                          np.sum(np.abs(predicts['gradient'].gradient())))
+                    #print("forward:", np.sum(np.abs(x.numpy())))
+                    print("gradient:", np.sum(np.abs(x.gradient())))
+                    # print("forward2:",
+                    #       np.sum(np.abs(predicts['gradient'].numpy())))
+                    # print("gradient2:",
+                    #       np.sum(np.abs(predicts['gradient'].gradient())))
 
                     sgd.minimize(loss)
                     srn.clear_gradients()
@@ -590,12 +594,14 @@ if __name__ == "__main__":
                     "fc_64.tmp_1@GRAD",
                     #"tmp_31", "tmp_31@GRAD" # gsrm_feature
                     #"fc_14.tmp_1", "fc_14.tmp_1@GRAD" # word_out
-                    "tmp_31",
-                    "tmp_31@GRAD"  # pvam_features
+                    #"tmp_31","tmp_31@GRAD"  # gsrm_features
+                    #"conv2d_4.tmp_1", "conv2d_4.tmp_1@GRAD" # inputs for head
+                    "bn_conv1.output.1.tmp_3",
+                    "bn_conv1.output.1.tmp_3@GRAD"  # first conv
                 ]
                 #for param in fluid.default_startup_program().global_block().all_parameters():
                 #    print("st param: {} {}".format(param.name, param.shape))
-                for i in range(1):
+                for i in range(10):
                     ret = exe.run(
                         fluid.default_main_program(),
                         fetch_list=[

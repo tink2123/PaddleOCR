@@ -189,6 +189,7 @@ class ResNetFPN(nn.Layer):
     def __call__(self, x):
         #print("input:", np.sum(x.numpy()))
         x = self.conv(x)
+        first_conv = x
         fpn_list = []
         F = []
         for i in range(len(self.depth)):
@@ -200,7 +201,7 @@ class ResNetFPN(nn.Layer):
                 if i + 1 == number:
                     F.append(x)
         base = F[-1]
-        first_conv = base
+
         j = 0
         for i, block in enumerate(self.base_block):
             if i % 3 == 0 and i < 6:
