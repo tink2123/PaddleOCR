@@ -426,7 +426,7 @@ if __name__ == "__main__":
                 #for p in srn.parameters():
                 #    print("dy param:{} {}".format(p.name, p.shape))
 
-                restore = np.load("../../../train_data/dy_param.npz")
+                restore = np.load("../../../train_data/dy_init_param_dict.npz")
                 state_dict = backbone.state_dict()
                 #for k, v in state_dict.items():
                 backbone.set_dict(restore, use_structured_name=False)
@@ -436,7 +436,7 @@ if __name__ == "__main__":
                 sgd = fluid.optimizer.SGDOptimizer(
                     learning_rate=0.001,
                     parameter_list=srn.parameters() + backbone.parameters())
-                for i in range(100):
+                for i in range(1):
                     feature, x = backbone(data)
                     #print("backbone:", np.sum(feature.numpy()))
                     predicts = srn(feature, others)
@@ -457,8 +457,8 @@ if __name__ == "__main__":
                     Loss = SRNLoss(params)
                     loss = Loss(predicts, others)
                     loss.backward()
-                    #print("forward:", np.sum(np.abs(x.numpy())))
-                    print("gradient:", np.sum(np.abs(x.gradient())))
+                    print("forward:", np.sum(np.abs(x.numpy())))
+                    #print("gradient:", np.sum(np.abs(x.gradient())))
                     # print("forward2:",
                     #       np.sum(np.abs(predicts['gradient'].numpy())))
                     # print("gradient2:",
@@ -552,7 +552,7 @@ if __name__ == "__main__":
                 exe.run(fluid.default_startup_program())
                 main_program = framework.default_main_program()
                 dy_dict = {}
-                restore = np.load("../../../train_data/dy_param.npz")
+                restore = np.load("../../../train_data/dy_init_param_dict.npz")
                 i = 0
                 for k, v in restore.items():
                     dy_dict[i] = v
@@ -601,7 +601,7 @@ if __name__ == "__main__":
                 ]
                 #for param in fluid.default_startup_program().global_block().all_parameters():
                 #    print("st param: {} {}".format(param.name, param.shape))
-                for i in range(10):
+                for i in range(1):
                     ret = exe.run(
                         fluid.default_main_program(),
                         fetch_list=[
