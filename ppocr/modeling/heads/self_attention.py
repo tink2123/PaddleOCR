@@ -51,7 +51,8 @@ class WrapEncoderForFeature(nn.Layer):
             d_model,
             max_length,
             prepostprocess_dropout,
-            bos_idx=bos_idx)
+            bos_idx=bos_idx,
+            word_emb_param_name="src_word_emb_table")
         self.encoder = Encoder(n_layer, n_head, d_key, d_value, d_model,
                                d_inner_hid, prepostprocess_dropout,
                                attention_dropout, relu_dropout, preprocess_cmd,
@@ -100,7 +101,7 @@ class WrapEncoder(nn.Layer):
 
     def forward(self, enc_inputs):
         src_word, src_pos, src_slf_attn_bias = enc_inputs
-        enc_input = self.prepare_decoder(src_word, src_pos)
+        enc_input  = self.prepare_decoder(src_word, src_pos)
         enc_output = self.encoder(enc_input, src_slf_attn_bias)
         return enc_output
 
@@ -214,24 +215,19 @@ class MultiHeadAttention(nn.Layer):
             static_kv = True
 
         q = self.q_fc(queries)
-        c = q.shape[1]
-        q = paddle.reshape(x=q, shape=[0, c, self.n_head, self.d_key])
+        q = paddle.reshape(x=q, shape=[0, 0, self.n_head, self.d_key])
         q = paddle.transpose(x=q, perm=[0, 2, 1, 3])
 
-        #if cache is not None and static_kv and "static_k" in cache:
-        if cache is not None and static_kv:
-            if "static_k" in cache:
-                # for encoder-decoder attention in inference and has cached
-                k = cache["static_k"]
-                v = cache["static_v"]
+        if cache is not None and static_kv and "static_k" in cache:
+            # for encoder-decoder attention in inference and has cached
+            k = cache["static_k"]
+            v = cache["static_v"]
         else:
             k = self.k_fc(keys)
             v = self.v_fc(values)
-            c = k.shape[1]
-            k = paddle.reshape(x=k, shape=[0, c, self.n_head, self.d_key])
+            k = paddle.reshape(x=k, shape=[0, 0, self.n_head, self.d_key])
             k = paddle.transpose(x=k, perm=[0, 2, 1, 3])
-            c = v.shape[1]
-            v = paddle.reshape(x=v, shape=[0, c, self.n_head, self.d_value])
+            v = paddle.reshape(x=v, shape=[0, 0, self.n_head, self.d_value])
             v = paddle.transpose(x=v, perm=[0, 2, 1, 3])
 
         if cache is not None:
@@ -263,8 +259,6 @@ class MultiHeadAttention(nn.Layer):
             weights = F.dropout(
                 weights, p=self.dropout_rate, mode="downscale_in_infer")
         out = paddle.matmul(weights, v)
-        if len(out.shape) != 4:
-            raise ValueError("out should be a 4-D Tensor")
 
         # combine heads
         out = paddle.transpose(out, perm=[0, 2, 1, 3])
@@ -399,7 +393,6 @@ class FFN(nn.Layer):
     def __init__(self, d_inner_hid, d_model, dropout_rate):
         super(FFN, self).__init__()
         self.dropout_rate = dropout_rate
-        self.flatten = paddle.nn.Flatten(start_axis=1, stop_axis=2)
         self.fc1 = paddle.nn.Linear(
             in_features=d_model, out_features=d_inner_hid)
         self.fc2 = paddle.nn.Linear(
@@ -413,3 +406,4 @@ class FFN(nn.Layer):
                 hidden, p=self.dropout_rate, mode="downscale_in_infer")
         out = self.fc2(hidden)
         return out
+

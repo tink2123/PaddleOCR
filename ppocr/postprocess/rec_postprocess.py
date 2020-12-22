@@ -200,16 +200,60 @@ class SRNLabelDecode(BaseRecLabelDecode):
         pred = preds['predict']
         if isinstance(preds, paddle.Tensor):
             pred = preds.numpy()
+        pred = paddle.reshape(pred, shape=[-1,38])
         # out = self.decode_preds(preds)
         preds_idx = pred.argmax(axis=1)
         preds_prob = pred.max(axis=1)
-        end_pos = np.where(preds_idx.numpy() != 37)[0]
-        preds_idx = preds_idx[:int(end_pos[-1])+1]
+        #end_pos = np.where(preds_idx.numpy() != 37)[0]
+        #preds_idx = preds_idx[:int(end_pos[-1])+1]
+        preds_idx = paddle.reshape(preds_idx, shape=[-1,25])
+        preds_prob = paddle.reshape(preds_prob, shape=[-1,25])
+        #print("before decode text:", preds_idx) 
         text = self.decode(preds_idx, preds_prob)
+        #print("after decode text:", text)
         if label is None:
             return text
+        #print("before decode:", label)
         label = self.decode(label, is_remove_duplicate=False)
+        #print("after decoder:",label)
         return text, label
+
+    def decode(self, text_index, text_prob=None, is_remove_duplicate=True):
+        """ convert text-index into text-label. """
+        result_list = []
+        ignored_tokens = self.get_ignored_tokens()
+        #print("ignored_tokens:", ignored_tokens)
+        batch_size = len(text_index)
+        #print("batch_size:", batch_size)
+        #char_list = []
+        #conf_list = []
+        for batch_idx in range(batch_size):
+            char_list = []
+            conf_list = []
+            for idx in range(len(text_index[batch_idx])):
+                if text_index[batch_idx][idx] in ignored_tokens:
+                    continue
+                if is_remove_duplicate:
+                    # only for predict
+                    if idx > 0 and text_index[batch_idx][idx - 1] == text_index[
+                            batch_idx][idx]:
+                        continue
+                char_list.append(self.character[int(text_index[batch_idx][
+                    idx])])
+                if text_prob is not None:
+                    #print("text prob:", text_prob)
+                    conf_list.append(text_prob[batch_idx][idx].numpy())
+                else:
+                    conf_list.append(1)
+            #if (batch_idx+1) % 25 == 0:
+            #    text = ''.join(char_list)
+            #    result_list.append((text, np.mean(conf_list)))
+            #    char_list = []
+            #    conf_list = []
+            text = ''.join(char_list)
+            #print("text:", text)
+            result_list.append((text, np.mean(conf_list)))
+        return result_list
 
     def add_special_char(self, dict_character):
         dict_character = dict_character + [self.beg_str, self.end_str]

@@ -213,6 +213,7 @@ def train(config,
             stats['lr'] = lr
             train_stats.update(stats)
 
+            #cal_metric_during_train = False
             if cal_metric_during_train:  # onlt rec and cls need
                 batch = [item.numpy() for item in batch]
                 #print("post process class:", post_process_class)

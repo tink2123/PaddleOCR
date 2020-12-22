@@ -286,17 +286,17 @@ class Config:
         self.w = w
         self.h = h
 
-        self.perspective = True
-        self.stretch = True
-        self.distort = True
+        self.perspective = False
+        self.stretch = False
+        self.distort = False
 
-        self.crop = True
+        self.crop = False
         self.affine = False
-        self.reverse = True
-        self.noise = True
-        self.jitter = True
-        self.blur = True
-        self.color = True
+        self.reverse = False
+        self.noise = False
+        self.jitter = False
+        self.blur = False
+        self.color = False
 
 
 def rad(x):
