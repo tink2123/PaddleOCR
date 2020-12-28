@@ -274,7 +274,7 @@ def prepare_encoder(
         param_attr=fluid.ParamAttr(
             name=pos_enc_param_name, trainable=False))
 
-    src_pos_enc.stop_gradient = True
+    #src_pos_enc.stop_gradient = True
     enc_input = src_word_emb + src_pos_enc
     return layers.dropout(
         enc_input, dropout_prob=dropout_rate, seed=None,
@@ -305,13 +305,13 @@ def prepare_decoder(src_word,
             initializer=fluid.initializer.Normal(0., src_emb_dim**-0.5)))
 
     src_word_emb = layers.scale(x=src_word_emb, scale=src_emb_dim**0.5)
-    print("gradient:", src_word_emb)
+    #print("gradient:", src_word_emb)
     src_pos_enc = layers.embedding(
         src_pos,
         size=[src_max_len, src_emb_dim],
         param_attr=fluid.ParamAttr(
             name=pos_enc_param_name, trainable=True))
-    src_pos_enc.stop_gradient = True
+    #src_pos_enc.stop_gradient = True
     enc_input = src_word_emb + src_pos_enc
     return layers.dropout(
         enc_input, dropout_prob=dropout_rate, seed=None,
@@ -465,7 +465,7 @@ def wrap_encoder(src_vocab_size,
 
     src_word, src_pos, src_slf_attn_bias = enc_inputs  #
 
-    print("src_word:", src_word)
+    #print("src_word:", src_word)
     enc_input = prepare_decoder(
         src_word,
         src_pos,
@@ -475,7 +475,7 @@ def wrap_encoder(src_vocab_size,
         prepostprocess_dropout,
         bos_idx=bos_idx,
         word_emb_param_name="src_word_emb_table")
-    print("enc_input:", enc_input)
+    #print("enc_input:", enc_input)
     #print("====warp encoder======")
     #print("n_layer:",n_layer)
     enc_output = encoder(

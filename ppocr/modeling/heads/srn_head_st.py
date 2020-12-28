@@ -223,8 +223,8 @@ class SRNPredict(object):
         #===== Visual-Semantic Fusion Decoder Module =====
         b, t, c1 = pvam_features.shape
         b, t, c2 = gsrm_features.shape
-        print("pvam_features:", pvam_features)
-        print("gsrm_features:", gsrm_features)
+        #print("pvam_features:", pvam_features)
+        #print("gsrm_features:", gsrm_features)
         combine_features_ = fluid.layers.concat(
             [pvam_features, gsrm_features], axis=2)
         img_comb_features_ = fluid.layers.reshape(
@@ -244,11 +244,12 @@ class SRNPredict(object):
 
     def __call__(self, inputs, others, mode=None):
 
-        print("inputs:", inputs)
+        #print("inputs:", inputs)
         pvam_features = self.pvam(inputs, others)
 
         gsrm_features, word_out, gsrm_out = self.gsrm(pvam_features, others)
-        print("pvam_features:", pvam_features)
+        #print("pvam_features:", pvam_features)
+        print("gsrm_out:", gsrm_out)
         final_out = self.vsfd(pvam_features, gsrm_features)
         #final_out = gsrm_out
         #print(final_out)
