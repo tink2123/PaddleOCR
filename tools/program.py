@@ -175,8 +175,6 @@ def train(config,
     best_model_dict = {main_indicator: 0}
     best_model_dict.update(pre_best_model_dict)
     train_stats = TrainingStats(log_smooth_window, ['lr'])
-    #restore = np.load("./dy_param.npz")
-    #model.set_dict(restore, use_structured_name=False)
     model.train()
 
     if 'start_epoch' in best_model_dict:
@@ -195,12 +193,8 @@ def train(config,
             t1 = time.time()
             images = batch[0]
             others = batch[-4:]
-            #print(others)
             preds = model(images, others)
-            #for p in model.parameters():
-            #    print("dy_parameters:{} {}".format(p.name, p.shape))
             loss = loss_class(preds, batch)
-            #print("loss:", loss)
             avg_loss = loss['loss']
             avg_loss.backward()
             optimizer.step()
@@ -216,8 +210,6 @@ def train(config,
             #cal_metric_during_train = False
             if cal_metric_during_train:  # onlt rec and cls need
                 batch = [item.numpy() for item in batch]
-                #print("post process class:", post_process_class)
-                #print("preds:", preds)
                 post_result = post_process_class(preds, batch[1])
                 eval_class(post_result, batch)
                 metirc = eval_class.get_metric()

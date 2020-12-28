@@ -1,5 +1,5 @@
 Global:
-  use_gpu: true
+  use_gpu: True
   epoch_num: 72
   log_smooth_window: 20
   print_batch_step: 5
@@ -25,16 +25,14 @@ Global:
 
 Optimizer:
   name: Adam
-  #momentum: 0.9
   lr:
     name: Cosine
-    #warmup_epoch: 0.02
-    #step_each_epoch: 1000
     learning_rate: 0.0001
 
 Architecture:
   model_type: rec
   algorithm: SRN
+  in_channels: 1
   Transform:
   Backbone:
     name: ResNetFPN

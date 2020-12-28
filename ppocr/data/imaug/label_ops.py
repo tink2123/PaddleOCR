@@ -207,7 +207,7 @@ class SRNLabelEncode(BaseRecLabelEncode):
     def __init__(self,
                  max_text_length=25,
                  character_dict_path=None,
-                 character_type='ch',
+                 character_type='en',
                  use_space_char=False,
                  **kwargs):
         super(SRNLabelEncode,
@@ -221,12 +221,13 @@ class SRNLabelEncode(BaseRecLabelEncode):
     def __call__(self, data):
         text = data['label']
         text = self.encode(text)
+        char_num = len(self.character_str)
         if text is None:
             return None
         if len(text) > self.max_text_len:
             return None
         data['length'] = np.array(len(text))
-        text = text + [37] * (self.max_text_len - len(text))
+        text = text + [char_num] * (self.max_text_len - len(text))
         data['label'] = np.array(text)
         return data
 

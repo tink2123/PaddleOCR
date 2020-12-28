@@ -87,8 +87,6 @@ class ResNetFPN(nn.Layer):
                             conv_name = "res" + str(block + 2) + "b" + str(i)
                     else:
                         conv_name = "res" + str(block + 2) + chr(97 + i)
-                    #print(i)
-                    #print(conv_name)
                     block_list = self.add_sublayer(
                         "bottleneckBlock_{}_{}".format(block, i),
                         BottleneckBlock(
@@ -123,31 +121,7 @@ class ResNetFPN(nn.Layer):
         self.bn_block = []
         for i in [-2, -3]:
             in_channels = out_ch_list[i + 1] + out_ch_list[i]
-            """
-            print("conv2d_trans:", out_ch_list[i])
-            self.conv_trans.append(
-                self.add_sublayer(
-                "F_{}_conv_trans".format(i),
-                nn.Conv2DTranspose(
-                    in_channels=out_ch_list[i + 1],
-                    out_channels=out_ch_list[i],
-                    kernel_size=4,
-                    stride=(2, 1),
-                    padding=1,
-                    weight_attr=paddle.ParamAttr(trainable=True),
-                    bias_attr=paddle.ParamAttr(trainable=True))
-            ))
 
-            self.bn_block.append(
-                self.add_sublayer(
-                "F_{}_bn_block_0".format(i),
-                nn.BatchNorm(
-                    act="relu",
-                    num_channels=out_ch_list[i],
-                    param_attr=paddle.ParamAttr(trainable=True),
-                    bias_attr=paddle.ParamAttr(trainable=True)))
-            )
-            """
             self.base_block.append(
                 self.add_sublayer(
                     "F_{}_base_block_0".format(i),
@@ -187,7 +161,6 @@ class ResNetFPN(nn.Layer):
         self.out_channels = 512
 
     def __call__(self, x):
-        #print("input:", np.sum(x.numpy()))
         x = self.conv(x)
         fpn_list = []
         F = []
@@ -234,34 +207,23 @@ class ConvBNLayer(nn.Layer):
             stride=stride,
             padding=(kernel_size - 1) // 2,
             groups=groups,
-            weight_attr=ParamAttr(
-                initializer=fluid.initializer.Constant(1.23),
-                name=name + '.conv2d.output.1.w_0'),
+            weight_attr=ParamAttr(name=name + '.conv2d.output.1.w_0'),
             bias_attr=False, )
-        #print("num_filter:{} stride:{}, filter_size:{}, groups:{}".format(out_channels, stride, kernel_size, groups))
+
         if name == "conv1":
-            #print("Name == conv1")
             bn_name = "bn_" + name
-            #print(bn_name)
         else:
             bn_name = "bn" + name[3:]
         self.bn = nn.BatchNorm(
             num_channels=out_channels,
             act=act,
-            param_attr=ParamAttr(
-                initializer=fluid.initializer.Constant(1.456),
-                name=name + '.output.1.w_0'),
-            bias_attr=ParamAttr(
-                initializer=fluid.initializer.Constant(1.002),
-                name=name + '.output.1.b_0'),
+            param_attr=ParamAttr(name=name + '.output.1.w_0'),
+            bias_attr=ParamAttr(name=name + '.output.1.b_0'),
             moving_mean_name=bn_name + "_mean",
             moving_variance_name=bn_name + "_variance")
 
     def __call__(self, x):
         x = self.conv(x)
-        #print("conv weights:", np.sum(self.conv.weight.numpy()))
-        #print("in bn conv:", np.sum(x.numpy()))
-        #print("in bn shape:", x.shape)
         x = self.bn(x)
         return x
 
@@ -357,4 +319,3 @@ class BasicBlock(nn.Layer):
         y = self.conv1(y)
         y = y + self.short(x)
         return F.relu(y)
-

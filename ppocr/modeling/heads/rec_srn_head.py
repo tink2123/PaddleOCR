@@ -81,7 +81,6 @@ class PVAM(nn.Layer):
 
         # pvam
         b, t, c = word_features.shape
-        #word_features = self.flatten0(word_features)
         word_features = self.fc0(word_features)
         word_features_ = paddle.reshape(word_features, [-1, 1, t, c])
         word_features_ = paddle.tile(word_features_, [1, self.max_length, 1, 1])
@@ -97,7 +96,6 @@ class PVAM(nn.Layer):
         attention_weight = F.softmax(attention_weight, axis=-1)
         pvam_features = paddle.matmul(attention_weight,
                                       word_features)  #[b, max_length, c]
-        #print("dy pvam feature:", np.sum(pvam_features.numpy()))
         return pvam_features
 
 
@@ -156,7 +154,6 @@ class GSRM(nn.Layer):
         b, t, c = inputs.shape
         pvam_features = paddle.reshape(inputs, [-1, c])
         word_out = self.fc0(pvam_features)
-        #word_out = F.softmax(word_out)
         word_ids = paddle.argmax(F.softmax(word_out), axis=1)
         word_ids = paddle.reshape(x=word_ids, shape=[-1, t, 1])
 
@@ -172,14 +169,11 @@ class GSRM(nn.Layer):
         word1 = paddle.cast(word1, "int64")
         word1 = word1[:, :-1, :]
         word2 = word_ids
-        #word1.stop_gradient = True
-        #word2.stop_gradient = True
 
         enc_inputs_1 = [word1, gsrm_word_pos, gsrm_slf_attn_bias1]
         enc_inputs_2 = [word2, gsrm_word_pos, gsrm_slf_attn_bias2]
 
         gsrm_feature1 = self.wrap_encoder0(enc_inputs_1)
-        #print("wrap_encoder:", gsrm_feature1.numpy())
         gsrm_feature2 = self.wrap_encoder1(enc_inputs_2)
 
         gsrm_feature2 = F.pad(gsrm_feature2, [0, 1],
@@ -192,10 +186,8 @@ class GSRM(nn.Layer):
 
         b, t, c = gsrm_out.shape
         gsrm_out = paddle.reshape(gsrm_out, [-1, c])
-        #gsrm_out = F.softmax(x=gsrm_out)
 
         return gsrm_features, word_out, gsrm_out
-        #return word_out
 
 
 class VSFD(nn.Layer):
@@ -211,7 +203,6 @@ class VSFD(nn.Layer):
         b, t, c1 = pvam_feature.shape
         b, t, c2 = gsrm_feature.shape
         combine_feature_ = paddle.concat([pvam_feature, gsrm_feature], axis=2)
-        gradient = combine_feature_
         img_comb_feature_ = paddle.reshape(
             combine_feature_, shape=[-1, c1 + c2])
         img_comb_feature_map = self.fc0(img_comb_feature_)
@@ -223,15 +214,14 @@ class VSFD(nn.Layer):
         img_comb_feature = paddle.reshape(combine_feature, shape=[-1, c1])
 
         out = self.fc1(img_comb_feature)
-        #out = F.softmax(out)
         return out
 
 
 class SRNHead(nn.Layer):
-    def __init__(self, in_channels, max_text_length, num_heads, num_encoder_TUs,
-                 num_decoder_TUs, hidden_dims, **kwargs):
+    def __init__(self, in_channels, out_channels, max_text_length, num_heads,
+                 num_encoder_TUs, num_decoder_TUs, hidden_dims, **kwargs):
         super(SRNHead, self).__init__()
-        self.char_num = 38
+        self.char_num = out_channels
         self.max_length = max_text_length
         self.num_heads = num_heads
         self.num_encoder_TUs = num_encoder_TUs
@@ -265,17 +255,14 @@ class SRNHead(nn.Layer):
         gsrm_slf_attn_bias2 = others[3]
 
         pvam_feature = self.pvam(inputs, encoder_word_pos, gsrm_word_pos)
-        #word_out= self.gsrm(
-        #    pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,
-        #    gsrm_slf_attn_bias2)
 
         gsrm_feature, word_out, gsrm_out = self.gsrm(
             pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,
             gsrm_slf_attn_bias2)
-        #self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
 
         final_out = self.vsfd(pvam_feature, gsrm_feature)
-        #final_out = gsrm_out
+        if not self.training:
+            final_out = F.softmax(final_out, axis=1)
 
         _, decoded_out = paddle.topk(final_out, k=1)
 
@@ -288,4 +275,3 @@ class SRNHead(nn.Layer):
         }
 
         return predicts
-

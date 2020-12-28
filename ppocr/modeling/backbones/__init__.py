@@ -32,6 +32,5 @@ def build_backbone(config, model_type):
     assert module_name in support_dict, Exception(
         'when model typs is {}, backbone only support {}'.format(model_type,
                                                                  support_dict))
-    print("back bone config:", config)
     module_class = eval(module_name)(**config)
     return module_class

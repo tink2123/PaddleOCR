@@ -83,7 +83,7 @@ class BaseRecLabelDecode(object):
                 char_list.append(self.character[int(text_index[batch_idx][
                     idx])])
                 if text_prob is not None:
-                    print("conf:",text_prob[batch_idx][idx].numpy())
+                    print("conf:", text_prob[batch_idx][idx].numpy())
                     conf_list.append(text_prob[batch_idx][idx])
                 else:
                     conf_list.append(1)
@@ -198,35 +198,29 @@ class SRNLabelDecode(BaseRecLabelDecode):
 
     def __call__(self, preds, label=None, *args, **kwargs):
         pred = preds['predict']
+        char_num = len(self.character_str) + 2
         if isinstance(preds, paddle.Tensor):
             pred = preds.numpy()
-        pred = paddle.reshape(pred, shape=[-1,38])
-        # out = self.decode_preds(preds)
+        pred = paddle.reshape(pred, shape=[-1, char_num])
+
         preds_idx = pred.argmax(axis=1)
         preds_prob = pred.max(axis=1)
-        #end_pos = np.where(preds_idx.numpy() != 37)[0]
-        #preds_idx = preds_idx[:int(end_pos[-1])+1]
-        preds_idx = paddle.reshape(preds_idx, shape=[-1,25])
-        preds_prob = paddle.reshape(preds_prob, shape=[-1,25])
-        #print("before decode text:", preds_idx) 
+
+        preds_idx = paddle.reshape(preds_idx, shape=[-1, 25])
+        preds_prob = paddle.reshape(preds_prob, shape=[-1, 25])
         text = self.decode(preds_idx, preds_prob)
-        #print("after decode text:", text)
+
         if label is None:
             return text
-        #print("before decode:", label)
         label = self.decode(label, is_remove_duplicate=False)
-        #print("after decoder:",label)
         return text, label
 
     def decode(self, text_index, text_prob=None, is_remove_duplicate=True):
         """ convert text-index into text-label. """
         result_list = []
         ignored_tokens = self.get_ignored_tokens()
-        #print("ignored_tokens:", ignored_tokens)
         batch_size = len(text_index)
-        #print("batch_size:", batch_size)
-        #char_list = []
-        #conf_list = []
+
         for batch_idx in range(batch_size):
             char_list = []
             conf_list = []
@@ -241,17 +235,11 @@ class SRNLabelDecode(BaseRecLabelDecode):
                 char_list.append(self.character[int(text_index[batch_idx][
                     idx])])
                 if text_prob is not None:
-                    #print("text prob:", text_prob)
                     conf_list.append(text_prob[batch_idx][idx].numpy())
                 else:
                     conf_list.append(1)
-            #if (batch_idx+1) % 25 == 0:
-            #    text = ''.join(char_list)
-            #    result_list.append((text, np.mean(conf_list)))
-            #    char_list = []
-            #    conf_list = []
+
             text = ''.join(char_list)
-            #print("text:", text)
             result_list.append((text, np.mean(conf_list)))
         return result_list
 

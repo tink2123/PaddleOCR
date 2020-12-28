@@ -56,15 +56,14 @@ class SRNRecResizeImg(object):
         self.image_shape = image_shape
         self.num_heads = num_heads
         self.max_text_length = max_text_length
-        self.char_num = 38
 
     def __call__(self, data):
         img = data['image']
         norm_img = resize_norm_img_srn(img, self.image_shape)
         data['image'] = norm_img
         [encoder_word_pos, gsrm_word_pos, gsrm_slf_attn_bias1, gsrm_slf_attn_bias2] = \
-            srn_other_inputs(self.image_shape, self.num_heads, self.max_text_length, self.char_num)
-        #data['lbl_weight'] = lbl_weight
+            srn_other_inputs(self.image_shape, self.num_heads, self.max_text_length)
+
         data['encoder_word_pos'] = encoder_word_pos
         data['gsrm_word_pos'] = gsrm_word_pos
         data['gsrm_slf_attn_bias1'] = gsrm_slf_attn_bias1
@@ -148,7 +147,7 @@ def resize_norm_img_srn(img, image_shape):
     return np.reshape(img_black, (c, row, col)).astype(np.float32)
 
 
-def srn_other_inputs(image_shape, num_heads, max_text_length, char_num):
+def srn_other_inputs(image_shape, num_heads, max_text_length):
 
     imgC, imgH, imgW = image_shape
     feature_dim = int((imgH / 8) * (imgW / 8))
@@ -157,9 +156,6 @@ def srn_other_inputs(image_shape, num_heads, max_text_length, char_num):
         (feature_dim, 1)).astype('int64')
     gsrm_word_pos = np.array(range(0, max_text_length)).reshape(
         (max_text_length, 1)).astype('int64')
-
-    #lbl_weight = np.array([int(char_num - 1)] * max_text_length).reshape(
-    #    (-1, 1)).astype('int64')
 
     gsrm_attn_bias_data = np.ones((1, max_text_length, max_text_length))
     gsrm_slf_attn_bias1 = np.triu(gsrm_attn_bias_data, 1).reshape(
@@ -171,9 +167,6 @@ def srn_other_inputs(image_shape, num_heads, max_text_length, char_num):
         [1, max_text_length, max_text_length])
     gsrm_slf_attn_bias2 = np.tile(gsrm_slf_attn_bias2,
                                   [num_heads, 1, 1]) * [-1e9]
-
-    #encoder_word_pos = encoder_word_pos[np.newaxis, :]
-    #gsrm_word_pos = gsrm_word_pos[np.newaxis, :]
 
     return [
         encoder_word_pos, gsrm_word_pos, gsrm_slf_attn_bias1,

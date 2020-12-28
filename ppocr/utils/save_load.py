@@ -120,8 +120,6 @@ def init_model(config, model, logger, optimizer=None, lr_scheduler=None):
                 pretrained_model))
     else:
         logger.info('train from scratch')
-    restore = np.load("./dy_init_param_dict.npz")
-    model.set_dict(restore, use_structured_name=False)
     return best_model_dict
 
 

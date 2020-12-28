@@ -33,8 +33,7 @@ class BaseModel(nn.Layer):
         """
         super(BaseModel, self).__init__()
 
-        #in_channels = config.get('in_channels', 3)
-        in_channels = config.get('in_channels', 1)
+        in_channels = config.get('in_channels', 3)
         model_type = config['model_type']
         # build transfrom,
         # for rec, transfrom can be TPS,None

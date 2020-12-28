@@ -25,7 +25,6 @@ def build_head(config):
     support_dict = ['DBHead', 'CTCHead', 'SRNHead']
 
     module_name = config.pop('name')
-    print(config)
     assert module_name in support_dict, Exception('head only support {}'.format(
         support_dict))
     module_class = eval(module_name)(**config)
