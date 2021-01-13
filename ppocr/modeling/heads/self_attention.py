@@ -252,6 +252,7 @@ class MultiHeadAttention(nn.Layer):
         # scale dot product attention
         product = paddle.matmul(x=q, y=k, transpose_y=True)
         product = product * self.d_model**-0.5
+
         if attn_bias is not None:
             product += attn_bias
         weights = F.softmax(product)
@@ -326,6 +327,7 @@ class PrepareEncoder(nn.Layer):
         self.dropout_rate = dropout_rate
 
     def forward(self, src_word, src_pos):
+        #print([self.emb.weight.name, self.emb.weight.shape])
         src_word_emb = src_word
         src_word_emb = fluid.layers.cast(src_word_emb, 'float32')
         src_word_emb = paddle.scale(x=src_word_emb, scale=self.src_emb_dim**0.5)
@@ -359,6 +361,7 @@ class PrepareDecoder(nn.Layer):
         self.emb0 = paddle.nn.Embedding(
             num_embeddings=src_vocab_size,
             embedding_dim=self.src_emb_dim,
+            padding_idx=bos_idx,
             weight_attr=paddle.ParamAttr(
                 name=word_emb_param_name,
                 initializer=nn.initializer.Normal(0., src_emb_dim**-0.5)))
@@ -371,9 +374,12 @@ class PrepareDecoder(nn.Layer):
     def forward(self, src_word, src_pos):
         src_word = fluid.layers.cast(src_word, 'int64')
         src_word = paddle.squeeze(src_word, axis=-1)
-        src_word_emb = self.emb0(src_word)
-        src_word_emb = paddle.scale(x=src_word_emb, scale=self.src_emb_dim**0.5)
-        gradient = src_word_emb
+        src_word_emb_ = self.emb0(src_word)
+        #print("emb0:", [self.emb0.weight.name, self.emb0.weight.shape])
+        #print("emb1:", [self.emb1.weight.name, self.emb1.weight.shape])
+
+        src_word_emb = paddle.scale(
+            x=src_word_emb_, scale=self.src_emb_dim**0.5)
         src_pos = paddle.squeeze(src_pos, axis=-1)
         src_pos_enc = self.emb1(src_pos)
         src_pos_enc.stop_gradient = True
@@ -383,7 +389,7 @@ class PrepareDecoder(nn.Layer):
                 x=enc_input, p=self.dropout_rate, mode="downscale_in_infer")
         else:
             out = enc_input
-        return out, gradient
+        return out, out
 
 
 class FFN(nn.Layer):

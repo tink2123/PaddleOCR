@@ -44,7 +44,7 @@ class PVAM(nn.Layer):
         t = 256
         c = 512
         self.wrap_encoder_for_feature = WrapEncoderForFeature(
-            src_vocab_size=1,
+            src_vocab_size=-1,
             max_length=t,
             n_layer=self.num_encoder_TUs,
             n_head=self.num_heads,
@@ -72,6 +72,7 @@ class PVAM(nn.Layer):
 
     def forward(self, inputs, encoder_word_pos, gsrm_word_pos):
         b, c, h, w = inputs.shape
+        #print("pvam:", [self.emb.weight.name, self.emb.weight.shape])
         conv_features = paddle.reshape(inputs, shape=[-1, c, h * w])
         conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])
         # transformer encoder
@@ -79,6 +80,7 @@ class PVAM(nn.Layer):
 
         enc_inputs = [conv_features, encoder_word_pos, None]
         word_features = self.wrap_encoder_for_feature(enc_inputs)
+        paddle.nn.ClipGradByValue(10)
 
         # pvam
         b, t, c = word_features.shape
@@ -195,7 +197,7 @@ class GSRM(nn.Layer):
         gsrm_out = paddle.reshape(gsrm_out, [-1, c])
         #gsrm_out = F.softmax(x=gsrm_out)
 
-        return gsrm_features, word_out, gsrm_out, gsrm_features
+        return gsrm_features, word_out, gsrm_out, gsrm_out
         #return word_out
 
 
@@ -256,9 +258,8 @@ class SRN(nn.Layer):
             hidden_dims=self.hidden_dims)
         self.vsfd = VSFD(in_channels=in_channels)
 
-        self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
-        print(self.gsrm.wrap_encoder0.prepare_decoder.emb0.weight)
-        print(self.gsrm.wrap_encoder0.prepare_decoder.emb0.weight.name)
+        self.gsrm.wrap_encoder1.prepare_decoder.emb0.weight = \
+            self.gsrm.wrap_encoder0.prepare_decoder.emb0.weight
 
     def forward(self, inputs, others):
         encoder_word_pos = others["encoder_word_pos"]
@@ -271,7 +272,7 @@ class SRN(nn.Layer):
         #    pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,
         #    gsrm_slf_attn_bias2)
 
-        gsrm_feature, word_out, gsrm_out, gradient = self.gsrm(
+        gsrm_feature, word_out, gsrm_out, debug = self.gsrm(
             pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,
             gsrm_slf_attn_bias2)
         #self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
@@ -287,7 +288,8 @@ class SRN(nn.Layer):
             'decoded_out': decoded_out,
             'word_out': word_out,
             'gsrm_out': gsrm_out,
-            'gradient': pvam_feature
+            'gsrm_feature': gsrm_feature,
+            'debug': debug
         }
 
         return predicts
@@ -309,13 +311,7 @@ class SRNLoss(nn.Layer):
         casted_label = paddle.cast(x=label, dtype='int64')
         label = paddle.reshape(label, shape=[-1, 1])
         cost_word = self.loss_func(word_predict, label=label)
-        #label = paddle.reshape(label, shape=[-1])
-        #label.stop_gradient = True
-        #print("label:", label.numpy())
-        #print("cost_word:", np.sum(cost_word.numpy()))
 
-        #print("word predict:", np.argmax(word_predict.numpy(), axis=1))
-        #print("gsrm predict:", np.argmax(gsrm_predict.numpy(), axis=1))
         cost_gsrm = self.loss_func(gsrm_predict, label=label)
         cost_vsfd = self.loss_func(predict, label=label)
 
@@ -354,8 +350,6 @@ if __name__ == "__main__":
                 fluid.default_main_program().random_seed = 10
                 dy_param_init_value = {}
                 np.random.seed(1333)
-                #data_np = np.random.random((1, 512, 8, 32)).astype('float32')
-                #data_np = np.random.random((1, 1, 64, 256)).astype('float32')*255
                 img = cv2.imread("../../../doc/imgs_words/en/word_1.png")
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 h, w = img.shape[0], img.shape[1]
@@ -392,7 +386,6 @@ if __name__ == "__main__":
                     3, 5, 12, 3, 5, 1, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37,
                     37, 37, 37, 37, 37, 37, 37, 37, 37
                 ]).astype('int64')
-                #print(label_np.shape)
 
                 encoder_word_pos = paddle.to_tensor(encoder_word_pos_np)
 
@@ -401,7 +394,6 @@ if __name__ == "__main__":
                 gsrm_slf_attn_bias2 = paddle.to_tensor(gsrm_slf_attn_bias2_np)
                 label = paddle.to_tensor(label_np)
                 label = paddle.reshape(label, shape=[-1, 1])
-                #print(label)
 
                 others = {
                     "label": label,
@@ -436,19 +428,19 @@ if __name__ == "__main__":
                 sgd = fluid.optimizer.SGDOptimizer(
                     learning_rate=0.001,
                     parameter_list=srn.parameters() + backbone.parameters())
-                for i in range(50):
+                for i in range(30):
                     feature, x = backbone(data)
                     #print("backbone:", np.sum(feature.numpy()))
                     predicts = srn(feature, others)
                     word_predict_dy = predicts['predict']
-                    pvam_features = predicts['pvam_feature']
-                    gsrm_out = predicts["gsrm_out"]
-                    gradient = predicts["gradient"]
+                    dy_pvam_features = predicts['pvam_feature']
+                    dy_gsrm_out = predicts["gsrm_feature"]
+                    dy_debug = predicts["gsrm_out"]
                     final_out = predicts["predict"]
 
                     #print("pvam_features:", np.sum(pvam_features.numpy()))
-                    #print("gsrm out:", np.sum(np.abs(gsrm_out.numpy())))
-                    #print("final out:",np.sum(np.abs(final_out.numpy())))
+                    #print("gsrm out:", np.sum(np.sum(dy_gsrm_out.numpy())))
+                    #print("final out:",np.sum(dy_pvam_features.numpy()))
                     #print("predict shape:", word_predict_dy.shape)
                     #print("mean predict:", np.mean(word_predict_dy.numpy()))
                     #print(
@@ -484,8 +476,6 @@ if __name__ == "__main__":
                     37, 37, 37, 37, 37, 37, 37, 37, 37
                 ]).astype('int64')
 
-                #xyz = fluid.layers.data(
-                #    name='xyz', shape=[512, 8, 32], dtype='float32')
                 xyz = fluid.layers.data(
                     name='xyz', shape=[1, 64, 256], dtype='float32')
                 encoder_word_pos = fluid.layers.data(
@@ -510,11 +500,8 @@ if __name__ == "__main__":
                     "gsrm_slf_attn_bias2": gsrm_slf_attn_bias2,
                 }
                 resnet = ResNet(params)
-                #for p in resnet.parameters():
-                #    print(p.name)
                 srn = SRNPredict(params)
                 feature = resnet(xyz)
-                print("feature:", feature)
                 out = srn(feature, others)
 
                 label_st = fluid.layers.reshape(label_st, shape=[25, 1])
@@ -522,10 +509,8 @@ if __name__ == "__main__":
                 word_predict = out["word_out"]
                 final_out = out["predict"]
                 gsrm_out = out["gsrm_out"]
-                print("final_out:", final_out)
+                gsrm_feature = out["gsrm_feature"]
                 pvam_feature = out["pvam_feature"]
-                #print(word_predict.shape)
-                print("label shape:", label_st.shape)
 
                 #casted_label = fluid.layers.cast(x=label_st, dtype='int64')
                 cost_word = fluid.layers.cross_entropy(
@@ -544,8 +529,6 @@ if __name__ == "__main__":
                     x=fluid.layers.reduce_sum(cost_vsfd), shape=[1])
 
                 sum_cost = fluid.layers.sum([cost_gsrm, cost_word, cost_vsfd])
-
-                #sum_cost = cost_gsrm
 
                 sgd = fluid.optimizer.SGDOptimizer(learning_rate=0.001)
                 sgd.minimize(fluid.layers.reduce_sum(sum_cost))
@@ -576,28 +559,18 @@ if __name__ == "__main__":
                         continue
                     ten.set(st_dict[var.name], place)
 
-                #fluid.load(main_program, "../../../train_data/best_accuracy.pdparams", exe)
-
-                #param_list = ["tmp_2", "tmp_4","tmp_8","tmp_11","tmp_14", "tmp_17", "tmp_21","tmp_24", "tmp_27", "tmp_30"]
-                """
-                param_list = ["layer_norm_7.tmp_2", "dropout_15.tmp_0", "tmp_10",
-                              "layer_norm_8.tmp_2", "dropout_17.tmp_0", "tmp_13",
-                              "layer_norm_10.tmp_2", "dropout_21.tmp_0", "tmp_14",
-                              "layer_norm_11.tmp_2", "dropout_23.tmp_0", "tmp_16",
-                              "layer_norm_12.tmp_2", "dropout_25.tmp_0", "tmp_17",
-                              "layer_norm_13.tmp_2", "layer_norm_14.tmp_2", "dropout_28.tmp_0", "tmp_20"
-                              ]
-                """
                 param_list = [
-                    "xyz",
-                    "bn_conv1.output.1.tmp_3",
-                    "res5c.add.output.5.tmp_1",
-                    "conv2d_4.tmp_1",
-                    "res4f.add.output.5.tmp_1",
-                    "fc_64.tmp_1@GRAD",
                     "reshape2_46.tmp_0",  # gsrm_out
                     "matmul_4.tmp_0",
-                    "matmul_4.tmp_0@GRAD"  # pvam_feature
+                    "matmul_4.tmp_0@GRAD",  # pvam_feature
+                    "layer_norm_13.tmp_2",  # pvam feature1
+                    "fc_14.tmp_1",  # word out
+                    "embedding_0.w_0",
+                    "embedding_1.w_0",
+                    "embedding_3.w_0",
+                    "embedding_2.tmp_0",
+                    "reshape2_46.tmp_0",
+                    #"embedding_5.w_0"
                     #"fc_14.tmp_1", "fc_14.tmp_1@GRAD" # word_out
                     #"tmp_31","tmp_31@GRAD"  # gsrm_features
                     #"conv2d_4.tmp_1", "conv2d_4.tmp_1@GRAD" # inputs for head
@@ -606,11 +579,11 @@ if __name__ == "__main__":
                 ]
                 #for param in fluid.default_startup_program().global_block().all_parameters():
                 #    print("st param: {} {}".format(param.name, param.shape))
-                for i in range(50):
+                for i in range(30):
                     ret = exe.run(
                         fluid.default_main_program(),
                         fetch_list=[
-                            final_out, feature, sum_cost, word_predict, "label"
+                            gsrm_out, feature, sum_cost, word_predict, "label"
                         ] + param_list,
                         feed={
                             'xyz': data_np,
@@ -620,24 +593,17 @@ if __name__ == "__main__":
                             'gsrm_slf_attn_bias1': gsrm_slf_attn_bias1_np,
                             'gsrm_slf_attn_bias2': gsrm_slf_attn_bias2_np
                         })
-                    #print("backbone:", ret[1])
-                    #print("mean predict:", np.mean(ret[3]))
-                    #print("predict:", np.argmax(ret[0], axis=1))
-                    #print("lable:", ret[4])
+
+                    print("dy loss:", np.sum(loss.numpy()))
                     print("st loss:", np.sum(ret[2]))
-
-                    #print({"cost_word":np.sum(ret[2])})
-                    #"cost_gsrm":np.sum(ret[3]), "cost_vsfd":np.sum(ret[4])})
-                    #print("predict:", np.sum(np.abs(ret[0])))
-
-                    #print("forword:", np.sum(np.abs(ret[-2])))
-                    #print("gradient:", np.sum(np.abs(ret[-1])))
-                    #print("final out:", np.sum(np.abs(ret[0])))
-                    #print("gsrm out:", np.sum(np.abs(ret[-3])))
-                    #print("gradient2:", np.sum(np.abs(ret[-3])))
-
-                #for item in ret[1:]:
-                #    print("st tmp:", np.sum(item))
-                #print("emb2 weights:", np.sum(ret[-2]))
+                    print("final out:", np.sum(ret[0]))
+                    print("dy_debug:", np.sum(dy_debug.numpy()))
+                    print("st debug:", np.sum(ret[-1]))
+                print("dy:", dy_debug.numpy()[0])
+                print("st:", ret[0][0])
+                print(
+                    "all close:",
+                    np.isclose(
+                        dy_debug.numpy(), ret[0], rtol=1.e-5, atol=1.e-6))
 
     unittest.main()

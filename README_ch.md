@@ -43,7 +43,7 @@ PaddleOCR旨在打造一套丰富、领先、且实用的OCR工具库，助力�
 
 <div align="center">
 <img src="./doc/ocr-android-easyedge.png"  width = "200" height = "200" />
-</div>
+</div>g
 
 - 代码体验：从[快速安装](./doc/doc_ch/installation.md) 开始
 

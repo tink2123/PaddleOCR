@@ -155,8 +155,8 @@ class SRNPredict(object):
             return word1, word2
 
         word1, word2 = prepare_bi(word_ids)
-        word1.stop_gradient = False
-        word2.stop_gradient = False
+        # word1.stop_gradient = False
+        # word2.stop_gradient = False
         enc_inputs_1 = [word1, gsrm_word_pos, gsrm_slf_attn_bias1]
         enc_inputs_2 = [word2, gsrm_word_pos, gsrm_slf_attn_bias2]
 
@@ -209,6 +209,7 @@ class SRNPredict(object):
         #gsrm_out = fluid.layers.softmax(input=fluid.layers.reshape(gsrm_out,
         #                                                           [-1, c]))
         gsrm_out = fluid.layers.reshape(gsrm_out, [-1, c])
+        print("gsrm out:", gsrm_out)
 
         return gsrm_features, word_out, gsrm_out
 
@@ -249,7 +250,6 @@ class SRNPredict(object):
 
         gsrm_features, word_out, gsrm_out = self.gsrm(pvam_features, others)
         #print("pvam_features:", pvam_features)
-        print("gsrm_out:", gsrm_out)
         final_out = self.vsfd(pvam_features, gsrm_features)
         #final_out = gsrm_out
         #print(final_out)
@@ -260,7 +260,8 @@ class SRNPredict(object):
             'predict': final_out,
             'decoded_out': decoded_out,
             'word_out': word_out,
-            'gsrm_out': gsrm_out
+            'gsrm_out': gsrm_out,
+            'gsrm_feature': gsrm_features
         }
 
         return predicts
