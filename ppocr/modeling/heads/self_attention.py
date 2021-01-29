@@ -24,6 +24,10 @@ from paddle import nn, ParamAttr
 from paddle.nn import functional as F
 import paddle.fluid as fluid
 import numpy as np
+from paddle.nn import Transformer
+from paddle.nn import TransformerDecoder
+from paddle.nn import TransformerEncoder
+from paddle.nn import TransformerEncoderLayer
 gradient_clip = 10
 
 
@@ -53,14 +57,22 @@ class WrapEncoderForFeature(nn.Layer):
             prepostprocess_dropout,
             bos_idx=bos_idx,
             word_emb_param_name="src_word_emb_table")
-        self.encoder = Encoder(n_layer, n_head, d_key, d_value, d_model,
-                               d_inner_hid, prepostprocess_dropout,
-                               attention_dropout, relu_dropout, preprocess_cmd,
-                               postprocess_cmd)
+        # self.encoder = Encoder(n_layer, n_head, d_key, d_value, d_model,
+        #                        d_inner_hid, prepostprocess_dropout,
+        #                        attention_dropout, relu_dropout, preprocess_cmd,
+        #                        postprocess_cmd)
+        self.encoder_layer = TransformerEncoderLayer(
+            d_model,
+            n_head,
+            d_inner_hid,
+            prepostprocess_dropout,
+            activation="relu")
+        self.encoder = TransformerEncoder(self.encoder_layer, n_layer)
 
     def forward(self, enc_inputs):
         conv_features, src_pos, src_slf_attn_bias = enc_inputs
         enc_input = self.prepare_encoder(conv_features, src_pos)
+        #enc_output = self.encoder(enc_input, src_slf_attn_bias)
         enc_output = self.encoder(enc_input, src_slf_attn_bias)
         return enc_output
 

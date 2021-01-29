@@ -1,5 +1,5 @@
 Global:
-  use_gpu: True
+  use_gpu: False
   epoch_num: 72
   log_smooth_window: 20
   print_batch_step: 5
@@ -56,9 +56,11 @@ Metric:
 
 Train:
   dataset:
-    name: LMDBDataSet
-    data_dir: ./train_data/srn_train_data_duiqi
-    #label_file_list: ["./train_data/ic15_data/1.txt"]
+    name: SimpleDataSet
+    #name: LMDBDataSet
+    #data_dir: ./train_data/srn_train_data_duiqi
+    data_dir: ./train_data/ic15_data/
+    label_file_list: ["./train_data/ic15_data/1.txt"]
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
@@ -76,7 +78,7 @@ Train:
                       'gsrm_slf_attn_bias2'] # dataloader will return list in this order
   loader:
     shuffle: False
-    batch_size_per_card: 64
+    batch_size_per_card: 1
     drop_last: True
     num_workers: 4
 

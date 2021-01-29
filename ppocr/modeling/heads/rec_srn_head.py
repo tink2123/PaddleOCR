@@ -45,7 +45,7 @@ class PVAM(nn.Layer):
         t = 256
         c = 512
         self.wrap_encoder_for_feature = WrapEncoderForFeature(
-            src_vocab_size=1,
+            src_vocab_size=-1,
             max_length=t,
             n_layer=self.num_encoder_TUs,
             n_head=self.num_heads,
