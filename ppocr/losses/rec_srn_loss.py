@@ -24,12 +24,22 @@ class SRNLoss(nn.Layer):
     def __init__(self, **kwargs):
         super(SRNLoss, self).__init__()
         self.loss_func = paddle.nn.loss.CrossEntropyLoss(reduction="sum")
+        self.ctc_loss_func = nn.CTCLoss(blank=0, reduction='none')
 
     def forward(self, predicts, batch):
         predict = predicts['predict']
         word_predict = predicts['word_out']
         gsrm_predict = predicts['gsrm_out']
+        ctc_predict = predicts['ctc_pred']
         label = batch[1]
+
+        ctc_predict = ctc_predict.transpose((1, 0, 2))
+        N, B, _ = predicts.shape
+        preds_lengths = paddle.to_tensor([N] * B, dtype='int64')
+        labels = batch[1].astype("int32")
+        label_lengths = batch[2].astype('int64')
+        ctc_loss = self.ctc_loss_func(predicts, labels, preds_lengths,
+                                      label_lengths)
 
         casted_label = paddle.cast(x=label, dtype='int64')
         casted_label = paddle.reshape(x=casted_label, shape=[-1, 1])
@@ -43,5 +53,6 @@ class SRNLoss(nn.Layer):
         cost_vsfd = paddle.reshape(x=paddle.sum(cost_vsfd), shape=[1])
 
         sum_cost = cost_word + cost_vsfd * 2.0 + cost_gsrm * 0.15
+        sum_cost = cost_word + ctc_loss
 
         return {'loss': sum_cost, 'word_loss': cost_word, 'img_loss': cost_vsfd}

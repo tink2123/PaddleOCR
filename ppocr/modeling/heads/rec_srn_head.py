@@ -28,6 +28,8 @@ from paddle.static import Program
 from ppocr.modeling.backbones.rec_resnet_fpn import ResNetFPN
 import paddle.fluid.framework as framework
 
+from .rec_ctc_head import CTCHead
+
 from collections import OrderedDict
 gradient_clip = 10
 
@@ -247,6 +249,7 @@ class SRNHead(nn.Layer):
             num_decoder_tus=self.num_decoder_TUs,
             hidden_dims=self.hidden_dims)
         self.vsfd = VSFD(in_channels=in_channels)
+        self.ctc = CTCHead(in_channels=in_channels, out_channels=self.char_num)
 
         self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
 
@@ -257,6 +260,7 @@ class SRNHead(nn.Layer):
         gsrm_slf_attn_bias2 = others[3]
 
         pvam_feature = self.pvam(inputs, encoder_word_pos, gsrm_word_pos)
+        ctc_pred = self.ctc(inputs)
 
         gsrm_feature, word_out, gsrm_out = self.gsrm(
             pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,
@@ -268,12 +272,9 @@ class SRNHead(nn.Layer):
 
         _, decoded_out = paddle.topk(final_out, k=1)
 
-        predicts = OrderedDict([
-            ('predict', final_out),
-            ('pvam_feature', pvam_feature),
-            ('decoded_out', decoded_out),
-            ('word_out', word_out),
-            ('gsrm_out', gsrm_out),
-        ])
+        predicts = OrderedDict(
+            [('predict', final_out), ('pvam_feature', pvam_feature),
+             ('decoded_out', decoded_out), ('word_out', word_out),
+             ('gsrm_out', gsrm_out), ('ctc_out', ctc_pred)])
 
         return predicts
