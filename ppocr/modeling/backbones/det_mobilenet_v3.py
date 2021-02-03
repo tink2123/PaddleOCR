@@ -192,7 +192,7 @@ class ConvBNLayer(nn.Layer):
             if self.act == "relu":
                 x = F.relu(x)
             elif self.act == "hard_swish":
-                x = F.activation.hard_swish(x)
+                x = F.activation.hardswish(x)
             else:
                 print("The activation function is selected incorrectly.")
                 exit()
@@ -281,5 +281,5 @@ class SEModule(nn.Layer):
         outputs = self.conv1(outputs)
         outputs = F.relu(outputs)
         outputs = self.conv2(outputs)
-        outputs = F.activation.hard_sigmoid(outputs)
+        outputs = F.activation.hardsigmoid(outputs)
         return inputs * outputs

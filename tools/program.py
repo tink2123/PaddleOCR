@@ -242,7 +242,7 @@ def train(config,
             # eval
             if global_step > start_eval_step and \
                     (global_step - start_eval_step) % eval_batch_step == 0 and dist.get_rank() == 0:
-                model_average = paddle.optimizer.ModelAverage(
+                model_average = paddle.incubate.optimizer.ModelAverage(
                     0.15,
                     parameters=model.parameters(),
                     min_average_window=10000,
