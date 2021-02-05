@@ -73,9 +73,11 @@ class BaseModel(nn.Layer):
             x = self.transform(x)
         x = self.backbone(x)
         if self.use_neck:
-            x = self.neck(x)
+            neck = self.neck(x)
         if data is None:
-            x = self.head(x)
+            x = self.head([x, neck])
+            #x = self.head(neck)
         else:
-            x = self.head(x, data)
+            x = self.head([x, neck], data)
+            #x = self.head(neck,data)
         return x

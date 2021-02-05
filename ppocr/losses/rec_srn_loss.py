@@ -31,14 +31,25 @@ class SRNLoss(nn.Layer):
         word_predict = predicts['word_out']
         gsrm_predict = predicts['gsrm_out']
         ctc_predict = predicts['ctc_pred']
+        print(
+            "ctc pred:",
+            paddle.argmax(
+                paddle.nn.functional.softmax(ctc_predict), axis=2))
         label = batch[1]
+        print("srn label:", label)
+        print(
+            "word_predict:",
+            paddle.argmax(
+                paddle.nn.functional.softmax(word_predict), axis=1))
 
         ctc_predict = ctc_predict.transpose((1, 0, 2))
-        N, B, _ = predicts.shape
+        N, B, _ = ctc_predict.shape
         preds_lengths = paddle.to_tensor([N] * B, dtype='int64')
         labels = batch[1].astype("int32")
+
+        print("ctc label:", labels)
         label_lengths = batch[2].astype('int64')
-        ctc_loss = self.ctc_loss_func(predicts, labels, preds_lengths,
+        ctc_loss = self.ctc_loss_func(ctc_predict, labels, preds_lengths,
                                       label_lengths)
 
         casted_label = paddle.cast(x=label, dtype='int64')

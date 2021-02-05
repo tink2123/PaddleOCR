@@ -30,6 +30,7 @@ class CTCLoss(nn.Layer):
         N, B, _ = predicts.shape
         preds_lengths = paddle.to_tensor([N] * B, dtype='int64')
         labels = batch[1].astype("int32")
+        print("ctc label:", labels)
         label_lengths = batch[2].astype('int64')
         loss = self.loss_func(predicts, labels, preds_lengths, label_lengths)
         loss = loss.mean()  # sum

@@ -249,7 +249,8 @@ class SRNHead(nn.Layer):
             num_decoder_tus=self.num_decoder_TUs,
             hidden_dims=self.hidden_dims)
         self.vsfd = VSFD(in_channels=in_channels)
-        self.ctc = CTCHead(in_channels=in_channels, out_channels=self.char_num)
+        self.ctc = CTCHead(
+            in_channels=in_channels, out_channels=self.char_num - 2)
 
         self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
 
@@ -259,8 +260,8 @@ class SRNHead(nn.Layer):
         gsrm_slf_attn_bias1 = others[2]
         gsrm_slf_attn_bias2 = others[3]
 
-        pvam_feature = self.pvam(inputs, encoder_word_pos, gsrm_word_pos)
-        ctc_pred = self.ctc(inputs)
+        pvam_feature = self.pvam(inputs[0], encoder_word_pos, gsrm_word_pos)
+        ctc_pred = self.ctc(inputs[1])
 
         gsrm_feature, word_out, gsrm_out = self.gsrm(
             pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,
@@ -275,6 +276,6 @@ class SRNHead(nn.Layer):
         predicts = OrderedDict(
             [('predict', final_out), ('pvam_feature', pvam_feature),
              ('decoded_out', decoded_out), ('word_out', word_out),
-             ('gsrm_out', gsrm_out), ('ctc_out', ctc_pred)])
+             ('gsrm_out', gsrm_out), ('ctc_pred', ctc_pred)])
 
         return predicts

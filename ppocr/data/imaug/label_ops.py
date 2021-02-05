@@ -121,10 +121,12 @@ class BaseRecLabelEncode(object):
             dict_character = list(self.character_str)
         self.character_type = character_type
         dict_character = self.add_special_char(dict_character)
+        #print("dict_character:", dict_character)
         self.dict = {}
         for i, char in enumerate(dict_character):
             self.dict[char] = i
         self.character = dict_character
+        print("character:", self.character)
 
     def add_special_char(self, dict_character):
         return dict_character
@@ -237,13 +239,14 @@ class SRNLabelEncode(BaseRecLabelEncode):
     def __call__(self, data):
         text = data['label']
         text = self.encode(text)
-        char_num = len(self.character_str)
+        char_num = len(self.character)
+        print("char_num:", char_num)
         if text is None:
             return None
         if len(text) > self.max_text_len:
             return None
         data['length'] = np.array(len(text))
-        text = text + [char_num] * (self.max_text_len - len(text))
+        text = text + [char_num - 1] * (self.max_text_len - len(text))
         data['label'] = np.array(text)
         return data
 

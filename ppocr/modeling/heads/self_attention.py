@@ -107,7 +107,14 @@ class WrapEncoder(nn.Layer):
             d_inner_hid,
             prepostprocess_dropout,
             activation="relu")
-        self.encoder = TransformerEncoder(self.encoder_layer, n_layer)
+        self.layer_norm = paddle.nn.LayerNorm(
+            normalized_shape=d_model,
+            weight_attr=paddle.ParamAttr(
+                initializer=fluid.initializer.Constant(1.)),
+            bias_attr=paddle.ParamAttr(
+                initializer=fluid.initializer.Constant(0.)))
+        self.encoder = TransformerEncoder(
+            self.encoder_layer, n_layer, norm=self.layer_norm)
 
     def forward(self, enc_inputs):
         src_word, src_pos, src_slf_attn_bias = enc_inputs
@@ -192,3 +199,80 @@ class PrepareDecoder(nn.Layer):
         else:
             out = enc_input
         return out
+
+
+class EncoderLayer(nn.Layer):
+    """
+    EncoderLayer
+    """
+
+    def __init__(self,
+                 n_head,
+                 d_key,
+                 d_value,
+                 d_model,
+                 d_inner_hid,
+                 prepostprocess_dropout,
+                 attention_dropout,
+                 relu_dropout,
+                 preprocess_cmd="n",
+                 postprocess_cmd="da"):
+
+        super(EncoderLayer, self).__init__()
+        self.preprocesser1 = PrePostProcessLayer(preprocess_cmd, d_model,
+                                                 prepostprocess_dropout)
+        self.self_attn = MultiHeadAttention(d_key, d_value, d_model, n_head,
+                                            attention_dropout)
+        self.postprocesser1 = PrePostProcessLayer(postprocess_cmd, d_model,
+                                                  prepostprocess_dropout)
+
+        self.preprocesser2 = PrePostProcessLayer(preprocess_cmd, d_model,
+                                                 prepostprocess_dropout)
+        self.ffn = FFN(d_inner_hid, d_model, relu_dropout)
+        self.postprocesser2 = PrePostProcessLayer(postprocess_cmd, d_model,
+                                                  prepostprocess_dropout)
+
+    def forward(self, enc_input, attn_bias):
+        attn_output = self.self_attn(
+            self.preprocesser1(enc_input), None, None, attn_bias)
+        attn_output = self.postprocesser1(attn_output, enc_input)
+        ffn_output = self.ffn(self.preprocesser2(attn_output))
+        ffn_output = self.postprocesser2(ffn_output, attn_output)
+        return ffn_output
+
+
+class PrePostProcessLayer(nn.Layer):
+    """
+    PrePostProcessLayer
+    """
+
+    def __init__(self, process_cmd, d_model, dropout_rate):
+        super(PrePostProcessLayer, self).__init__()
+        self.process_cmd = process_cmd
+        self.functors = []
+        for cmd in self.process_cmd:
+            if cmd == "a":  # add residual connection
+                self.functors.append(lambda x, y: x + y if y is not None else x)
+            elif cmd == "n":  # add layer normalization
+                self.functors.append(
+                    self.add_sublayer(
+                        "layer_norm_%d" % len(
+                            self.sublayers(include_sublayers=False)),
+                        paddle.nn.LayerNorm(
+                            normalized_shape=d_model,
+                            weight_attr=fluid.ParamAttr(
+                                initializer=fluid.initializer.Constant(1.)),
+                            bias_attr=fluid.ParamAttr(
+                                initializer=fluid.initializer.Constant(0.)))))
+            elif cmd == "d":  # add dropout
+                self.functors.append(lambda x: F.dropout(
+                    x, p=dropout_rate, mode="downscale_in_infer")
+                                     if dropout_rate else x)
+
+    def forward(self, x, residual=None):
+        for i, cmd in enumerate(self.process_cmd):
+            if cmd == "a":
+                x = self.functors[i](x, residual)
+            else:
+                x = self.functors[i](x)
+        return x
