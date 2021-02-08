@@ -31,28 +31,38 @@ class SRNLoss(nn.Layer):
         word_predict = predicts['word_out']
         gsrm_predict = predicts['gsrm_out']
         ctc_predict = predicts['ctc_pred']
-        print(
-            "ctc pred:",
-            paddle.argmax(
-                paddle.nn.functional.softmax(ctc_predict), axis=2))
-        label = batch[1]
-        print("srn label:", label)
-        print(
-            "word_predict:",
-            paddle.argmax(
-                paddle.nn.functional.softmax(word_predict), axis=1))
+        # print(
+        #     "ctc pred:",
+        #     paddle.argmax(
+        #         paddle.nn.functional.softmax(ctc_predict), axis=2))
+        srn_label = batch[1]
+        # print("srn label:", srn_label)
+        # print("batch_2:", batch[2])
+        # print(
+        #     "word_predict:",
+        #     paddle.argmax(
+        #         paddle.nn.functional.softmax(word_predict), axis=1))
 
         ctc_predict = ctc_predict.transpose((1, 0, 2))
         N, B, _ = ctc_predict.shape
         preds_lengths = paddle.to_tensor([N] * B, dtype='int64')
-        labels = batch[1].astype("int32")
+        ctc_labels = batch[2].astype("int32")
 
-        print("ctc label:", labels)
-        label_lengths = batch[2].astype('int64')
-        ctc_loss = self.ctc_loss_func(ctc_predict, labels, preds_lengths,
+        label_lengths = batch[3].astype('int64')
+        # print("ctc_labels:", ctc_labels)
+        # print("ctc_predict:", ctc_predict.shape)
+        # print("preds_length:", preds_lengths)
+        # print("label length:", label_lengths)
+        #
+        # print(
+        #     "ctc_predict:",
+        #     paddle.argmax(
+        #         paddle.nn.functional.softmax(ctc_predict), axis=2))
+
+        ctc_loss = self.ctc_loss_func(ctc_predict, ctc_labels, preds_lengths,
                                       label_lengths)
 
-        casted_label = paddle.cast(x=label, dtype='int64')
+        casted_label = paddle.cast(x=srn_label, dtype='int64')
         casted_label = paddle.reshape(x=casted_label, shape=[-1, 1])
 
         cost_word = self.loss_func(word_predict, label=casted_label)

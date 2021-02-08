@@ -84,12 +84,11 @@ class SequenceEncoder(nn.Layer):
                 self.encoder_reshape.out_channels, hidden_size)
             self.out_channels = self.encoder.out_channels
             self.only_reshape = False
-        self.pool = nn.MaxPool2D(kernel_size=[8, 1], stride=1, padding=0)
+        self.pool = nn.MaxPool2D(kernel_size=[8, 8], stride=1, padding=0)
 
     def forward(self, x):
         #print("before pool:", x.shape)
         x = self.pool(x)
-        #print("after pool:", x.shape)
         x = self.encoder_reshape(x)
         if not self.only_reshape:
             x = self.encoder(x)

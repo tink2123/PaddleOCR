@@ -250,7 +250,7 @@ class SRNHead(nn.Layer):
             hidden_dims=self.hidden_dims)
         self.vsfd = VSFD(in_channels=in_channels)
         self.ctc = CTCHead(
-            in_channels=in_channels, out_channels=self.char_num - 2)
+            in_channels=in_channels, out_channels=self.char_num - 1)
 
         self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
 
@@ -262,6 +262,7 @@ class SRNHead(nn.Layer):
 
         pvam_feature = self.pvam(inputs[0], encoder_word_pos, gsrm_word_pos)
         ctc_pred = self.ctc(inputs[1])
+        # print("ctc pred:",ctc_pred.shape)
 
         gsrm_feature, word_out, gsrm_out = self.gsrm(
             pvam_feature, gsrm_word_pos, gsrm_slf_attn_bias1,

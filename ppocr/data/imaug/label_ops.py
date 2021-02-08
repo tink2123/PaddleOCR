@@ -126,7 +126,7 @@ class BaseRecLabelEncode(object):
         for i, char in enumerate(dict_character):
             self.dict[char] = i
         self.character = dict_character
-        print("character:", self.character)
+        # print("character:", self.character)
 
     def add_special_char(self, dict_character):
         return dict_character
@@ -240,14 +240,16 @@ class SRNLabelEncode(BaseRecLabelEncode):
         text = data['label']
         text = self.encode(text)
         char_num = len(self.character)
-        print("char_num:", char_num)
+        # print("char_num:", char_num)
         if text is None:
             return None
         if len(text) > self.max_text_len:
             return None
         data['length'] = np.array(len(text))
+        ctc_text = text + [0] * (self.max_text_len - len(text))
         text = text + [char_num - 1] * (self.max_text_len - len(text))
-        data['label'] = np.array(text)
+        data['srn_label'] = np.array(text)
+        data['ctc_label'] = np.array(ctc_text)
         return data
 
     def get_ignored_tokens(self):
