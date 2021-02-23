@@ -90,7 +90,8 @@ class BaseRecLabelDecode(object):
         return result_list
 
     def get_ignored_tokens(self):
-        return [0]  # for ctc blank
+        return [6624]  # for ctc blank
+        # return [0] # normal ctc
 
 
 class CTCLabelDecode(BaseRecLabelDecode):
@@ -105,6 +106,7 @@ class CTCLabelDecode(BaseRecLabelDecode):
                                              character_type, use_space_char)
 
     def __call__(self, preds, label=None, *args, **kwargs):
+        #preds = preds['ctc_pred']
         if isinstance(preds, paddle.Tensor):
             preds = preds.numpy()
         preds_idx = preds.argmax(axis=2)
@@ -116,7 +118,8 @@ class CTCLabelDecode(BaseRecLabelDecode):
         return text, label
 
     def add_special_char(self, dict_character):
-        dict_character = ['blank'] + dict_character
+        #dict_character = ['blank'] + dict_character
+        dict_character = dict_character + [self.beg_str, self.end_str]
         return dict_character
 
 

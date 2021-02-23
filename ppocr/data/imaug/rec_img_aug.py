@@ -162,7 +162,8 @@ def resize_norm_img_srn(img, image_shape):
 def srn_other_inputs(image_shape, num_heads, max_text_length):
 
     imgC, imgH, imgW = image_shape
-    feature_dim = int((imgH / 8) * (imgW / 8))
+    #feature_dim = int((imgH / 8) * (imgW / 8))
+    feature_dim = int((imgH / 8) * (imgW / 16))
 
     encoder_word_pos = np.array(range(0, feature_dim)).reshape(
         (feature_dim, 1)).astype('int64')

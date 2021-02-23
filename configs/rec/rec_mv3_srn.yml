@@ -1,12 +1,12 @@
 Global:
   use_gpu: True
-  epoch_num: 72
+  epoch_num: 500000
   log_smooth_window: 20
   print_batch_step: 5
   save_model_dir: ./output/rec/srn_new
-  save_epoch_step: 3
+  save_epoch_step: 3000
   # evaluation is run every 5000 iterations after the 4000th iteration
-  eval_batch_step: [0, 20000]
+  eval_batch_step: [0, 2000000]
   cal_metric_during_train: True
   pretrained_model: 
   checkpoints:
@@ -28,7 +28,7 @@ Optimizer:
   beta2: 0.999
   clip_norm: 10.0
   lr:
-    learning_rate: 0.001
+    learning_rate: 0.0001
 
 Architecture:
   model_type: rec
@@ -36,7 +36,10 @@ Architecture:
   in_channels: 1
   Transform:
   Backbone:
-    name: ResNetFPN
+    name: MobileNetV3
+    scale: 0.5
+    model_name: small
+    small_stride: [1, 2, 2, 2]
   Neck:
     name: SequenceEncoder
     encoder_type: rnn
@@ -47,13 +50,14 @@ Architecture:
     num_heads: 8
     num_encoder_TUs: 2
     num_decoder_TUs: 4
-    hidden_dims: 512
+    hidden_dims: 256
 
 Loss:
   name: SRNLoss
 
 PostProcess:
-  name: SRNLabelDecode
+  # name: SRNLabelDecode
+  name: CTCLabelDecode
 
 Metric:
   name: RecMetric
@@ -63,7 +67,8 @@ Train:
   dataset:
     name: SimpleDataSet
     data_dir: ./train_data/real_data/
-    label_file_list: ["./train_data/real_data/val_list_2.txt"]
+    #label_file_list: ["./train_data/real_data/val_list_2.txt"]
+    label_file_list: ["./train_data/ic15_data/1.txt"]
     # name: LMDBDataSet
     # data_dir: ./train_data/data_lmdb_release/training/
     transforms:
@@ -84,15 +89,15 @@ Train:
                       'gsrm_slf_attn_bias2'] # dataloader will return list in this order
   loader:
     shuffle: True
-    batch_size_per_card: 1
+    batch_size_per_card: 8
     drop_last: False
-    num_workers: 4
+    num_workers: 1
 
 Eval:
   dataset:
     name: SimpleDataSet
     data_dir: ./train_data/real_data/
-    label_file_list: ["./train_data/real_data/val_list.txt"]
+    label_file_list: ["./train_data/ic15_data/1.txt"]
     # name: LMDBDataSet
     # data_dir: ./train_data/data_lmdb_release/validation/
     transforms:

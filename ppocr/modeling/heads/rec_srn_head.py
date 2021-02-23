@@ -44,8 +44,10 @@ class PVAM(nn.Layer):
         self.num_encoder_TUs = num_encoder_tus
         self.hidden_dims = hidden_dims
         # Transformer encoder
-        t = 256
-        c = 512
+        #t = 256
+        #c = 512
+        t = 128
+        c = 256
         self.wrap_encoder_for_feature = WrapEncoderForFeature(
             src_vocab_size=-1,
             max_length=t,
@@ -64,6 +66,7 @@ class PVAM(nn.Layer):
 
         # PVAM
         self.flatten0 = paddle.nn.Flatten(start_axis=0, stop_axis=1)
+        print("in channels:", in_channels)
         self.fc0 = paddle.nn.Linear(
             in_features=in_channels,
             out_features=in_channels, )
@@ -195,7 +198,7 @@ class GSRM(nn.Layer):
 
 
 class VSFD(nn.Layer):
-    def __init__(self, in_channels=512, pvam_ch=512, char_num=38):
+    def __init__(self, in_channels=512, pvam_ch=256, char_num=38):
         super(VSFD, self).__init__()
         self.char_num = char_num
         self.fc0 = paddle.nn.Linear(
@@ -248,9 +251,8 @@ class SRNHead(nn.Layer):
             num_encoder_tus=self.num_encoder_TUs,
             num_decoder_tus=self.num_decoder_TUs,
             hidden_dims=self.hidden_dims)
-        self.vsfd = VSFD(in_channels=in_channels)
-        self.ctc = CTCHead(
-            in_channels=in_channels, out_channels=self.char_num - 1)
+        self.vsfd = VSFD(in_channels=in_channels, char_num=self.char_num)
+        self.ctc = CTCHead(in_channels=in_channels, out_channels=self.char_num)
 
         self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
 
@@ -262,6 +264,11 @@ class SRNHead(nn.Layer):
 
         pvam_feature = self.pvam(inputs[0], encoder_word_pos, gsrm_word_pos)
         ctc_pred = self.ctc(inputs[1])
+        # print(
+        #     "ctc_predict:",
+        #     paddle.argmax(
+        #         paddle.nn.functional.softmax(ctc_pred), axis=2).numpy().reshape(1,-1))
+
         # print("ctc pred:",ctc_pred.shape)
 
         gsrm_feature, word_out, gsrm_out = self.gsrm(
@@ -270,9 +277,12 @@ class SRNHead(nn.Layer):
 
         final_out = self.vsfd(pvam_feature, gsrm_feature)
         if not self.training:
-            final_out = F.softmax(final_out, axis=1)
+            # final_out = F.softmax(final_out, axis=1)
+            final_out = F.softmax(ctc_pred, axis=2)
+            # return final_out
 
         _, decoded_out = paddle.topk(final_out, k=1)
+        # print("decode out:", decoded_out)
 
         predicts = OrderedDict(
             [('predict', final_out), ('pvam_feature', pvam_feature),

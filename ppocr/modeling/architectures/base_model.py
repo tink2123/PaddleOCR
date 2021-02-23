@@ -65,7 +65,9 @@ class BaseModel(nn.Layer):
             in_channels = self.neck.out_channels
 
         # # build head, head is need for det, rec and cls
+        print("in_channels:", in_channels)
         config["Head"]['in_channels'] = in_channels
+        #config["Head"]['in_channels'] = 256
         self.head = build_head(config["Head"])
 
     def forward(self, x, data=None):
@@ -76,8 +78,8 @@ class BaseModel(nn.Layer):
             neck = self.neck(x)
         if data is None:
             x = self.head([x, neck])
-            #x = self.head(neck)
+            # x = self.head(neck)
         else:
             x = self.head([x, neck], data)
-            #x = self.head(neck,data)
+            # x = self.head(neck,data)
         return x
