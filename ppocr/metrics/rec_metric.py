@@ -22,16 +22,19 @@ class RecMetric(object):
 
     def __call__(self, pred_label, *args, **kwargs):
         preds, labels = pred_label
+        #print("lables:", labels)
         correct_num = 0
         all_num = 0
         norm_edit_dis = 0.0
         for (pred, pred_conf), (target, _) in zip(preds, labels):
-            pred = pred.replace(" ", "")
-            target = target.replace(" ", "")
+            #pred = pred.replace(" ", "")
+            #target = target.replace(" ", "")
             norm_edit_dis += Levenshtein.distance(pred, target) / max(
                 len(pred), len(target), 1)
             if pred == target:
                 correct_num += 1
+            #else:
+            #    print("pred:{}, target:{}".format(pred,target))
             all_num += 1
         self.correct_num += correct_num
         self.all_num += all_num

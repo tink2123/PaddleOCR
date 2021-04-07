@@ -292,9 +292,9 @@ class Config:
         self.w = w
         self.h = h
 
-        self.perspective = self.use_tia
-        self.stretch = self.use_tia
-        self.distort = self.use_tia
+        self.perspective = False
+        self.stretch = False
+        self.distort = False
 
         self.crop = True
         self.affine = False

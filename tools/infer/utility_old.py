@@ -44,7 +44,7 @@ def parse_args():
 
     # DB parmas
     parser.add_argument("--det_db_thresh", type=float, default=0.3)
-    parser.add_argument("--det_db_box_thresh", type=float, default=0.5) #0.5
+    parser.add_argument("--det_db_box_thresh", type=float, default=0.5)
     parser.add_argument("--det_db_unclip_ratio", type=float, default=1.6)
     parser.add_argument("--max_batch_size", type=int, default=10)
     parser.add_argument("--use_dilation", type=bool, default=False)
@@ -62,7 +62,7 @@ def parse_args():
     # params for text recognizer
     parser.add_argument("--rec_algorithm", type=str, default='CRNN')
     parser.add_argument("--rec_model_dir", type=str)
-    parser.add_argument("--rec_image_shape", type=str, default="3, 32, 200")
+    parser.add_argument("--rec_image_shape", type=str, default="3, 32, 320")
     parser.add_argument("--rec_char_type", type=str, default='ch')
     parser.add_argument("--rec_batch_num", type=int, default=6)
     parser.add_argument("--max_text_length", type=int, default=25)
@@ -85,9 +85,6 @@ def parse_args():
 
     parser.add_argument("--enable_mkldnn", type=str2bool, default=False)
     parser.add_argument("--use_pdserving", type=str2bool, default=False)
-
-    # params for save res or inference
-    parser.add_argument("--save_res_path", type=str, default="./inference_results/ppocr_inference.txt")
 
     return parser.parse_args()
 
@@ -132,7 +129,7 @@ def create_predictor(args, mode, logger):
             #config.set_mkldnn_op({'conv2d', 'depthwise_conv2d', 'pool2d', 'batch_norm'})
             args.rec_batch_num = 1
 
-    config.enable_memory_optim()
+    # config.enable_memory_optim()
     config.disable_glog_info()
 
     config.delete_pass("conv_transpose_eltwiseadd_bn_fuse_pass")
