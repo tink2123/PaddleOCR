@@ -42,8 +42,8 @@ class PVAM(nn.Layer):
         self.num_encoder_TUs = num_encoder_tus
         self.hidden_dims = hidden_dims
         # Transformer encoder
-        t = 256
-        c = 512
+        t = 128
+        c = 288
         self.wrap_encoder_for_feature = WrapEncoderForFeature(
             src_vocab_size=1,
             max_length=t,
@@ -77,7 +77,6 @@ class PVAM(nn.Layer):
         conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])
         # transformer encoder
         b, t, c = conv_features.shape
-
         enc_inputs = [conv_features, encoder_word_pos, None]
         word_features = self.wrap_encoder_for_feature(enc_inputs)
 
@@ -193,7 +192,7 @@ class GSRM(nn.Layer):
 
 
 class VSFD(nn.Layer):
-    def __init__(self, in_channels=512, pvam_ch=512, char_num=38):
+    def __init__(self, in_channels=512, pvam_ch=288, char_num=6625):
         super(VSFD, self).__init__()
         self.char_num = char_num
         self.fc0 = paddle.nn.Linear(
@@ -246,7 +245,10 @@ class SRNHead(nn.Layer):
             num_encoder_tus=self.num_encoder_TUs,
             num_decoder_tus=self.num_decoder_TUs,
             hidden_dims=self.hidden_dims)
-        self.vsfd = VSFD(in_channels=in_channels, char_num=self.char_num)
+        self.vsfd = VSFD(
+            in_channels=in_channels,
+            pvam_ch=self.hidden_dims,
+            char_num=self.char_num)
 
         self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
 
