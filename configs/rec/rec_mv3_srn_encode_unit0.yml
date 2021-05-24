@@ -1,9 +1,9 @@
 Global:
   use_gpu: True
-  epoch_num: 72
+  epoch_num: 200
   log_smooth_window: 20
   print_batch_step: 5
-  save_model_dir: ./output/rec/srn_encode0
+  save_model_dir: ./output/rec/srn_encode1
   save_epoch_step: 3
   # evaluation is run every 5000 iterations after the 4000th iteration
   eval_batch_step: [0, 2000]
@@ -46,7 +46,7 @@ Architecture:
     name: SRNHead
     max_text_length: 25
     num_heads: 8
-    num_encoder_TUs: 0
+    num_encoder_TUs: 1
     num_decoder_TUs: 4
     hidden_dims: 288
 
@@ -72,7 +72,7 @@ Train:
       - RecAug: 
       - SRNLabelEncode: # Class handling label
       - SRNRecResizeImg:
-          image_shape: [1, 64, 256]
+          image_shape: [1, 64, 512]
       - KeepKeys:
           keep_keys: ['image',
                       'label',
@@ -98,7 +98,7 @@ Eval:
           channel_first: False
       - SRNLabelEncode: # Class handling label
       - SRNRecResizeImg:
-          image_shape: [1, 64, 256]
+          image_shape: [1, 64, 512]
       - KeepKeys:
           keep_keys: ['image',
                       'label',

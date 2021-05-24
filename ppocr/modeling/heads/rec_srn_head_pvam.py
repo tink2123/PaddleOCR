@@ -42,7 +42,7 @@ class PVAM(nn.Layer):
         self.num_encoder_TUs = num_encoder_tus
         self.hidden_dims = hidden_dims
         # Transformer encoder
-        t = 128
+        t = 256
         c = 288
         self.wrap_encoder_for_feature = WrapEncoderForFeature(
             src_vocab_size=1,
@@ -76,12 +76,12 @@ class PVAM(nn.Layer):
         conv_features = paddle.reshape(inputs, shape=[-1, c, h * w])
         conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])
         # transformer encoder
-        #b, t, c = conv_features.shape
-        #enc_inputs = [conv_features, encoder_word_pos, None]
-        #word_features = self.wrap_encoder_for_feature(enc_inputs)
+        b, t, c = conv_features.shape
+        #print("conv shape b,t,c:", [b,t,c])
+        enc_inputs = [conv_features, encoder_word_pos, None]
+        word_features = self.wrap_encoder_for_feature(enc_inputs)
 
         # pvam
-        word_features = conv_features
         b, t, c = word_features.shape
         word_features = self.fc0(word_features)
         word_features_ = paddle.reshape(word_features, [-1, 1, t, c])
@@ -111,9 +111,10 @@ class GSRM(nn.Layer):
         self.num_encoder_TUs = num_encoder_tus
         self.num_decoder_TUs = num_decoder_tus
         self.hidden_dims = hidden_dims
-
+     
         self.fc0 = paddle.nn.Linear(
             in_features=in_channels, out_features=self.char_num)
+        """
         self.wrap_encoder0 = WrapEncoder(
             src_vocab_size=self.char_num + 1,
             max_length=self.max_length,
@@ -149,7 +150,7 @@ class GSRM(nn.Layer):
         self.mul = lambda x: paddle.matmul(x=x,
                                            y=self.wrap_encoder0.prepare_decoder.emb0.weight,
                                            transpose_y=True)
-
+        """
     def forward(self, inputs, gsrm_word_pos, gsrm_slf_attn_bias1,
                 gsrm_slf_attn_bias2):
         # ===== GSRM Visual-to-semantic embedding block =====
@@ -219,7 +220,7 @@ class SRNHead(nn.Layer):
             num_decoder_tus=self.num_decoder_TUs,
             hidden_dims=self.hidden_dims)
 
-        self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
+        #self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
 
     def forward(self, inputs, others):
         encoder_word_pos = others[0]

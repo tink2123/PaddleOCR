@@ -17,8 +17,12 @@ from __future__ import division
 from __future__ import print_function
 
 from paddle import nn
+import paddle
 
 from ppocr.modeling.heads.rec_ctc_head import get_para_bias_attr
+from ppocr.modeling.heads.self_attention import WrapEncoderForFeature
+
+import numpy as np
 
 
 class Im2Seq(nn.Layer):
@@ -65,10 +69,18 @@ class EncoderWithFC(nn.Layer):
 
 
 class SequenceEncoder(nn.Layer):
-    def __init__(self, in_channels, encoder_type, hidden_size=48, **kwargs):
+    def __init__(self, in_channels, encoder_type, hidden_size=48, max_text_length=25, num_heads=8,
+                 num_encoder_TUs=3, num_decoder_TUs=4, hidden_dims=288, **kwargs):
         super(SequenceEncoder, self).__init__()
         self.encoder_reshape = Im2Seq(in_channels)
         self.out_channels = self.encoder_reshape.out_channels
+
+        self.max_length = max_text_length
+        self.num_heads = num_heads
+        self.num_encoder_TUs = num_encoder_TUs
+        self.num_decoder_TUs = num_decoder_TUs
+        self.hidden_dims = hidden_dims
+
         if encoder_type == 'reshape':
             self.only_reshape = True
         else:
@@ -84,9 +96,41 @@ class SequenceEncoder(nn.Layer):
                 self.encoder_reshape.out_channels, hidden_size)
             self.out_channels = self.encoder.out_channels
             self.only_reshape = False
+        # Transformer encoder
+        t = 256
+        c = 512
+        self.wrap_encoder_for_feature = WrapEncoderForFeature(
+            src_vocab_size=1,
+            max_length=t,
+            n_layer=self.num_encoder_TUs,
+            n_head=self.num_heads,
+            d_key=int(self.hidden_dims / self.num_heads),
+            d_value=int(self.hidden_dims / self.num_heads),
+            d_model=self.hidden_dims,
+            d_inner_hid=self.hidden_dims,
+            prepostprocess_dropout=0.1,
+            attention_dropout=0.1,
+            relu_dropout=0.1,
+            preprocess_cmd="n",
+            postprocess_cmd="da",
+            weight_sharing=True)
 
     def forward(self, x):
+        b, c, h, w = x.shape
+        #print("backbone shape:", x.shape)
+        conv_features = paddle.reshape(x, shape=[-1, c, h * w])
+        conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])
+        # transformer encoder
+        b, t, c = conv_features.shape
+        encoder_word_pos = np.array(range(0, 80)).reshape(
+            (80, 1)).astype('int64')
+        #print("conv_feature:", conv_features.shape)
+        encoder_word_pos = paddle.to_tensor(encoder_word_pos)
+        enc_inputs = [conv_features, encoder_word_pos, None]
+        word_features = self.wrap_encoder_for_feature(enc_inputs)
+        #print(word_features.shape)
         x = self.encoder_reshape(x)
         if not self.only_reshape:
             x = self.encoder(x)
         return x
+
