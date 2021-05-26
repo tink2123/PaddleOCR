@@ -121,7 +121,7 @@ class DepthwiseSeparable(nn.Layer):
 
 
 class CPULiteNet(nn.Layer):
-    def __init__(self, scale=0.5, in_channels=3, **kwargs):
+    def __init__(self, scale=0.5, class_dim=1000):
         super(CPULiteNet, self).__init__()
         self.scale = scale
         self.block_list = []
@@ -230,7 +230,7 @@ class CPULiteNet(nn.Layer):
                 num_filters1=512,
                 num_filters2=1024,
                 num_groups=512,
-                stride=(1, 1),
+                stride=(2, 1),
                 dw_size=5,
                 padding=2,
                 scale=scale,
@@ -238,14 +238,13 @@ class CPULiteNet(nn.Layer):
                 name="conv5_6"))
         self.block_list.append(conv5_6)
 
-        last_channel = 1024
         conv6 = self.add_sublayer(
             "conv6",
             sublayer=DepthwiseSeparable(
-                num_channels=int(last_channel * scale),
-                num_filters1=last_channel,
-                num_filters2=last_channel,
-                num_groups=last_channel,
+                num_channels=int(1024 * scale),
+                num_filters1=1024,
+                num_filters2=1024,
+                num_groups=1024,
                 stride=1,
                 dw_size=5,
                 padding=2,
@@ -254,16 +253,14 @@ class CPULiteNet(nn.Layer):
                 name="conv6"))
         self.block_list.append(conv6)
 
-        #self.pool = nn.MaxPool2D(kernel_size=2, stride=2, padding=0)
-        self.pool = nn.AdaptiveAvgPool2D(output_size=(1, 80))
-        self.out_channels = int(last_channel * scale)
+        self.pool = nn.MaxPool2D(kernel_size=2, stride=2, padding=0)
+        self.out_channels = int(1024 * scale)
 
     def forward(self, inputs):
         y = self.conv1(inputs)
         for block in self.block_list:
             y = block(y)
         y = self.pool(y)
-        print("backbone shape:", y.shape)
         return y
 
 
