@@ -38,10 +38,11 @@ Architecture:
   algorithm: CRNN
   Transform:
   Backbone:
-    name: MobileNetV3
-    scale: 0.5
-    model_name: small
-    small_stride: [1, 2, 2, 2]
+    name: CPULiteNet
+    #name: MobileNetV3
+    #scale: 0.5
+    #model_name: small
+    #small_stride: [1, 2, 2, 2]
   Neck:
     name: SequenceEncoder
     encoder_type: rnn
@@ -63,8 +64,9 @@ Metric:
 Train:
   dataset:
     name: SimpleDataSet
-    data_dir: ./train_data/real_data/
-    label_file_list: ["./train_data/real_data/train_list.txt"]
+    data_dir: ./train_data/ic15_data2/
+    #label_file_list: ["./train_data/real_data/train_list.txt"]
+    label_file_list: ["train_data/ic15_data2/rec_test.txt"]
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
@@ -77,15 +79,15 @@ Train:
           keep_keys: ['image', 'label', 'length'] # dataloader will return list in this order
   loader:
     shuffle: True
-    batch_size_per_card: 128
+    batch_size_per_card: 8
     drop_last: True
     num_workers: 4
 
 Eval:
   dataset:
     name: SimpleDataSet
-    data_dir: ./train_data/real_data/
-    label_file_list: ["./train_data/real_data/val_list.txt"]
+    data_dir: ./train_data/ic15_data2
+    label_file_list: ["train_data/ic15_data2/rec_test.txt"]
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
@@ -98,5 +100,5 @@ Eval:
   loader:
     shuffle: False
     drop_last: False
-    batch_size_per_card: 128
+    batch_size_per_card: 8
     num_workers: 4

@@ -77,7 +77,8 @@ class MobileNetV3(nn.Layer):
                 [5, 576, 96, True, 'hardswish', 1],
                 [5, 576, 96, True, 'hardswish', 1],
             ]
-            cls_ch_squeeze = 576
+            #cls_ch_squeeze = 576
+            cls_ch_squeeze = 1024
         else:
             raise NotImplementedError("mode[" + model_name +
                                       "_model] is not implemented!")

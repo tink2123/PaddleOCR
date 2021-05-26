@@ -69,8 +69,16 @@ class EncoderWithFC(nn.Layer):
 
 
 class SequenceEncoder(nn.Layer):
-    def __init__(self, in_channels, encoder_type, hidden_size=48, max_text_length=25, num_heads=8,
-                 num_encoder_TUs=3, num_decoder_TUs=4, hidden_dims=288, **kwargs):
+    def __init__(self,
+                 in_channels,
+                 encoder_type,
+                 hidden_size=48,
+                 max_text_length=25,
+                 num_heads=8,
+                 num_encoder_TUs=3,
+                 num_decoder_TUs=4,
+                 hidden_dims=512,
+                 **kwargs):
         super(SequenceEncoder, self).__init__()
         self.encoder_reshape = Im2Seq(in_channels)
         self.out_channels = self.encoder_reshape.out_channels
@@ -97,8 +105,9 @@ class SequenceEncoder(nn.Layer):
             self.out_channels = self.encoder.out_channels
             self.only_reshape = False
         # Transformer encoder
-        t = 256
-        c = 512
+        #t = 256
+        #c = 512
+        t = 80
         self.wrap_encoder_for_feature = WrapEncoderForFeature(
             src_vocab_size=1,
             max_length=t,
@@ -117,11 +126,12 @@ class SequenceEncoder(nn.Layer):
 
     def forward(self, x):
         b, c, h, w = x.shape
-        #print("backbone shape:", x.shape)
+        print("backbone shape:", x.shape)
         conv_features = paddle.reshape(x, shape=[-1, c, h * w])
         conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])
         # transformer encoder
         b, t, c = conv_features.shape
+        print("conv feature:", [b, t, c])
         encoder_word_pos = np.array(range(0, 80)).reshape(
             (80, 1)).astype('int64')
         #print("conv_feature:", conv_features.shape)
@@ -133,4 +143,3 @@ class SequenceEncoder(nn.Layer):
         if not self.only_reshape:
             x = self.encoder(x)
         return x
-
