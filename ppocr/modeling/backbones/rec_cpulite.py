@@ -230,7 +230,7 @@ class CPULiteNet(nn.Layer):
                 num_filters1=512,
                 num_filters2=1024,
                 num_groups=512,
-                stride=(2, 1),
+                stride=(1, 1),
                 dw_size=5,
                 padding=2,
                 scale=scale,
@@ -254,7 +254,8 @@ class CPULiteNet(nn.Layer):
                 name="conv6"))
         self.block_list.append(conv6)
 
-        self.pool = nn.MaxPool2D(kernel_size=2, stride=2, padding=0)
+        #self.pool = nn.MaxPool2D(kernel_size=2, stride=2, padding=0)
+        self.pool = nn.AdaptiveAvgPool2D(output_size=(1, 80))
         self.out_channels = int(last_channel * scale)
 
     def forward(self, inputs):
