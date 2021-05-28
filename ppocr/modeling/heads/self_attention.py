@@ -166,8 +166,9 @@ class EncoderLayer(nn.Layer):
         super(EncoderLayer, self).__init__()
         self.preprocesser1 = PrePostProcessLayer(preprocess_cmd, d_model,
                                                  prepostprocess_dropout)
-        self.self_attn = MultiHeadAttention(d_key, d_value, d_model, n_head,
-                                            attention_dropout)
+        # self.self_attn = MultiHeadAttention(d_key, d_value, d_model, n_head,
+        #                                     attention_dropout)
+        self.self_attn = ConvAttention(dim=80, img_size=d_model)
         self.postprocesser1 = PrePostProcessLayer(postprocess_cmd, d_model,
                                                   prepostprocess_dropout)
 
@@ -178,12 +179,123 @@ class EncoderLayer(nn.Layer):
                                                   prepostprocess_dropout)
 
     def forward(self, enc_input, attn_bias):
-        attn_output = self.self_attn(
-            self.preprocesser1(enc_input), None, None, attn_bias)
+        print("=======Encode layer=======")
+        attn_output = self.self_attn(self.preprocesser1(enc_input))
         attn_output = self.postprocesser1(attn_output, enc_input)
-        ffn_output = self.ffn(self.preprocesser2(attn_output))
+        print("attn_output shape:", attn_output.shape)
+        ffn_output = self.ffn(attn_output)
         ffn_output = self.postprocesser2(ffn_output, attn_output)
+        print("ffn output:", ffn_output.shape)
         return ffn_output
+
+
+class ConvAttention(nn.Layer):
+    def __init__(self,
+                 dim,
+                 img_size,
+                 heads=8,
+                 dim_head=64,
+                 kernel_size=3,
+                 q_stride=1,
+                 k_stride=1,
+                 v_stride=1,
+                 dropout=0.,
+                 last_stage=False):
+
+        super().__init__()
+        self.last_stage = last_stage
+        self.img_size = img_size
+        inner_dim = dim_head * heads
+        self.project_out = not (heads == 1 and dim_head == dim)
+
+        self.heads = heads
+        self.scale = dim_head**-0.5
+        pad = (kernel_size - q_stride) // 2
+        self.to_q = SepConv2d(dim, inner_dim, kernel_size, q_stride, pad)
+        self.to_k = SepConv2d(dim, inner_dim, kernel_size, k_stride, pad)
+        self.to_v = SepConv2d(dim, inner_dim, kernel_size, v_stride, pad)
+
+        if self.project_out:
+            self.to_out = nn.Sequential(
+                nn.Linear(inner_dim, dim), nn.Dropout(dropout))
+
+    def forward(self, x):
+        b, n, _, h = *x.shape, self.heads
+        if self.last_stage:
+            cls_token = x[:, 0]
+            x = x[:, 1:]
+            cls_b, cls_n, _ = cls_token.unsqueeze(1).shape
+            cls_token = paddle.reshape(
+                cls_token.unsqueeze(1), shape=[cls_b, h, cls_n, -1])
+        print("x shape:", x.shape)  #[8,80,512]
+        l = self.heads
+        w = int(self.img_size / self.heads)
+        print("l:{}, w:{}".format(l, w))
+        x = paddle.reshape(x, shape=[b, -1, l, w])  #[8,80,8,64]
+
+        q = self.to_q(x)
+        q = paddle.reshape(q, shape=[b, h, -1, l, w])
+        q = paddle.transpose(q, perm=[0, 1, 3, 4, 2])
+        q = paddle.reshape(q, shape=[b, h, l * w, -1])
+
+        v = self.to_v(x)
+        v = paddle.reshape(v, shape=[b, h, -1, l, w])
+        v = paddle.transpose(v, perm=[0, 1, 3, 4, 2])
+        v = paddle.reshape(v, shape=[b, h, l * w, -1])
+
+        k = self.to_k(x)  #[1, 64, 56, 56]
+        k = paddle.reshape(k, shape=[b, h, -1, l, w])
+        k = paddle.transpose(k, perm=[0, 1, 3, 4, 2])
+        k = paddle.reshape(k, shape=[b, h, l * w, -1])
+
+        if self.last_stage:
+            q = paddle.concat((cls_token, q), axis=2)
+            v = paddle.concat((cls_token, v), axis=2)
+            k = paddle.concat((cls_token, k), axis=2)
+
+        dots = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
+        #print("dots:{}, q:{}, k:{}".format(np.sum(dots.numpy()), np.sum(q.numpy()), np.sum(k.numpy())))
+        attn = paddle.nn.functional.softmax(dots, axis=-1)
+
+        out = paddle.matmul(attn, v)
+        b, h, n, d = out.shape
+
+        out = paddle.transpose(out, perm=[0, 2, 1, 3])
+        out = paddle.reshape(out, [b, n, h * d])
+        if self.project_out:
+            out = self.to_out(out)
+        else:
+            out = out
+        out = paddle.transpose(out, perm=[0, 2, 1])
+        return out
+
+
+class SepConv2d(nn.Layer):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=1,
+            padding=0,
+            dilation=1, ):
+        super(SepConv2d, self).__init__()
+        self.depthwise = nn.Conv2D(
+            in_channels,
+            in_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=in_channels)
+        self.bn = nn.BatchNorm2D(in_channels)
+        self.pointwise = nn.Conv2D(in_channels, out_channels, kernel_size=1)
+
+    def forward(self, x):
+        x = self.depthwise(x)
+        x = self.bn(x)
+        x = self.pointwise(x)
+        return x
 
 
 class MultiHeadAttention(nn.Layer):
@@ -399,6 +511,7 @@ class FFN(nn.Layer):
             in_features=d_inner_hid, out_features=d_model)
 
     def forward(self, x):
+        print("======FNN=====")
         hidden = self.fc1(x)
         hidden = F.relu(hidden)
         if self.dropout_rate:

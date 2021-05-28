@@ -121,7 +121,7 @@ class DepthwiseSeparable(nn.Layer):
 
 
 class CPULiteNet(nn.Layer):
-    def __init__(self, scale=0.5, class_dim=1000):
+    def __init__(self, scale=0.5, in_channels=3, **kwargs):
         super(CPULiteNet, self).__init__()
         self.scale = scale
         self.block_list = []

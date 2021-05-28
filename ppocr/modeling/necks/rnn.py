@@ -34,7 +34,7 @@ class Im2Seq(nn.Layer):
         B, C, H, W = x.shape
         assert H == 1
         x = x.squeeze(axis=2)
-        x = x.transpose([0, 2, 1])  # (NTC)(batch, width, channels)
+        #x = x.transpose([0, 2, 1])  # (NTC)(batch, width, channels)
         return x
 
 
@@ -75,7 +75,7 @@ class SequenceEncoder(nn.Layer):
                  hidden_size=48,
                  max_text_length=25,
                  num_heads=8,
-                 num_encoder_TUs=3,
+                 num_encoder_TUs=1,
                  num_decoder_TUs=4,
                  hidden_dims=512,
                  **kwargs):
@@ -125,9 +125,9 @@ class SequenceEncoder(nn.Layer):
             weight_sharing=True)
 
     def forward(self, x):
-        b, c, h, w = x.shape
         print("backbone shape:", x.shape)
-        conv_features = paddle.reshape(x, shape=[-1, c, h * w])
+        b, c, h, w = x.shape
+        conv_features = paddle.reshape(x, shape=[-1, 512, h * w])
         conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])
         # transformer encoder
         b, t, c = conv_features.shape
@@ -139,7 +139,8 @@ class SequenceEncoder(nn.Layer):
         enc_inputs = [conv_features, encoder_word_pos, None]
         word_features = self.wrap_encoder_for_feature(enc_inputs)
         #print(word_features.shape)
-        x = self.encoder_reshape(x)
+        word_features = paddle.unsqueeze(word_features, axis=2)
+        x = self.encoder_reshape(word_features)
         if not self.only_reshape:
             x = self.encoder(x)
         return x
