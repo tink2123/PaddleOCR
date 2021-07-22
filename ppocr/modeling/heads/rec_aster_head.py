@@ -47,9 +47,9 @@ class AsterHead(nn.Layer):
     def forward(self, x, targets=None, embed=None):
         return_dict = {}
         embedding_vectors = self.embeder(x)
-        rec_targets, rec_lengths = targets
 
         if self.training:
+            rec_targets, rec_lengths = targets
             rec_pred = self.decoder([x, rec_targets, rec_lengths],
                                     embedding_vectors)
             return_dict['rec_pred'] = rec_pred
