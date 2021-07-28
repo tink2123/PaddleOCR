@@ -43,14 +43,14 @@ class AsterHead(nn.Layer):
         self.time_step = time_step
         self.embeder = Embedding(self.time_step, in_channels)
         self.beam_width = beam_width
-        self.eos = 99
+        self.eos = self.num_classes
 
     def forward(self, x, targets=None, embed=None):
         return_dict = {}
         embedding_vectors = self.embeder(x)
 
         if self.training:
-            rec_targets, rec_lengths = targets
+            rec_targets, rec_lengths, _ = targets
             rec_pred = self.decoder([x, rec_targets, rec_lengths],
                                     embedding_vectors)
             return_dict['rec_pred'] = rec_pred
@@ -207,6 +207,10 @@ class AttentionRecognitionHead(nn.Layer):
             pos_index = paddle.expand_as(pos_index, candidates)
             predecessors = paddle.cast(
                 candidates / self.num_classes + pos_index, dtype='int64')
+            predecessors = paddle.reshape(predecessors, shape=[batch_size * beam_width, 1])
+            # print("candidates:", candidates.shape)
+            # print("pos index:", pos_index.shape)
+            # print("predecessors:", predecessors.shape)
             state = paddle.index_select(
                 state, index=predecessors.squeeze(), axis=1)
 

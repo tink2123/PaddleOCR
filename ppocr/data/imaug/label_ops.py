@@ -278,7 +278,7 @@ class AttnLabelEncode(BaseRecLabelEncode):
         self.end_str = "eos"
         self.unknown = "UNKNOWN"
         dict_character = [self.beg_str] + dict_character + [self.end_str
-                                                            ] + [self.unknown]
+                                                            ] # + [self.unknown]
         return dict_character
 
     def __call__(self, data):

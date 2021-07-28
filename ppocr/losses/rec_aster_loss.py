@@ -36,19 +36,21 @@ class AsterLoss(nn.Layer):
         self.sequence_normalize = sequence_normalize
         self.sample_normalize = sample_normalize
         self.loss_func = paddle.nn.CosineSimilarity()
+        #self.fasttext = fasttext.load_model('/workspace/data/cc.en.300.bin')
 
     def forward(self, predicts, batch):
         targets = batch[1].astype("int64")
         label_lengths = batch[2].astype('int64')
-        # sem_target = batch[3].astype('float32')
+        sem_target = batch[3].astype('float32')
         embedding_vectors = predicts['embedding_vectors']
         rec_pred = predicts['rec_pred']
 
         # semantic loss
         # print(embedding_vectors)
         # print(embedding_vectors.shape)
-        # targets = fasttext[targets]
-        # sem_loss = 1 - self.loss_func(embedding_vectors, targets)
+        #targets = self.fasttext[targets]
+        #print("sem target:", sem_target)
+        sem_loss = 1 - self.loss_func(embedding_vectors, sem_target)
 
         # rec loss
         batch_size, num_steps, num_classes = rec_pred.shape[0], rec_pred.shape[
@@ -75,5 +77,5 @@ class AsterLoss(nn.Layer):
             output = output / paddle.sum(mask)
         if self.sample_normalize:
             output = output / batch_size
-        loss = output
+        loss = output + sem_loss * 0.1
         return {'loss': loss}  # , 'sem_loss':sem_loss}

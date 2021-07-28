@@ -173,7 +173,7 @@ class AttnLabelDecode(BaseRecLabelDecode):
         self.unkonwn = "UNKNOWN"
         dict_character = dict_character
         dict_character = [self.beg_str] + dict_character + [self.end_str
-                                                            ] + [self.unkonwn]
+                                                            ] #+ [self.unkonwn]
         return dict_character
 
     def decode(self, text_index, text_prob=None, is_remove_duplicate=False):
@@ -214,12 +214,20 @@ class AttnLabelDecode(BaseRecLabelDecode):
             label = self.decode(label, is_remove_duplicate=False)
             return text, label
         """
-        preds = preds["rec_pred"]
-        if isinstance(preds, paddle.Tensor):
-            preds = preds.numpy()
-        preds_idx = preds.argmax(axis=2)
-        preds_prob = preds.max(axis=2)
+        preds_idx = preds["rec_pred"]
+        # print(preds)
+        # print("preds_idx:", preds_idx)
+        if isinstance(preds_idx, paddle.Tensor):
+            preds_idx = preds_idx.numpy()
+        if "rec_pred_scores" in preds:
+            preds_idx = preds["rec_pred"]
+            preds_prob = preds["rec_pred_scores"]
+        else:
+            preds_idx = preds["rec_pred"].argmax(axis=2)
+            preds_prob = preds["rec_pred"].max(axis=2)
         text = self.decode(preds_idx, preds_prob, is_remove_duplicate=False)
+        # print("pred:", text)
+        # print("label:", label)
         if label is None:
             return text
         label = self.decode(label, is_remove_duplicate=False)

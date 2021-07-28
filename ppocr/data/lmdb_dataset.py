@@ -18,7 +18,7 @@ import lmdb
 import cv2
 
 from .imaug import transform, create_operators
-
+import fasttext
 
 class LMDBDataSet(Dataset):
     def __init__(self, config, mode, logger, seed=None):
@@ -37,6 +37,7 @@ class LMDBDataSet(Dataset):
         if self.do_shuffle:
             np.random.shuffle(self.data_idx_order_list)
         self.ops = create_operators(dataset_config['transforms'], global_config)
+        self.fast_model = fasttext.load_model('/workspace/data/cc.en.300.bin')
 
     def load_hierarchical_lmdb_dataset(self, data_dir):
         lmdb_sets = {}
@@ -94,7 +95,8 @@ class LMDBDataSet(Dataset):
         label = label.decode('utf-8')
         img_key = 'image-%09d'.encode() % index
         imgbuf = txn.get(img_key)
-        return imgbuf, label
+        fast_label = self.fast_model[label]
+        return imgbuf, label, fast_label
 
     def __getitem__(self, idx):
         lmdb_idx, file_idx = self.data_idx_order_list[idx]
@@ -104,8 +106,8 @@ class LMDBDataSet(Dataset):
                                                 file_idx)
         if sample_info is None:
             return self.__getitem__(np.random.randint(self.__len__()))
-        img, label = sample_info
-        data = {'image': img, 'label': label}
+        img, label, fast_label = sample_info
+        data = {'image': img, 'label': label, 'fast_label': fast_label}
         outs = transform(data, self.ops)
         if outs is None:
             return self.__getitem__(np.random.randint(self.__len__()))
