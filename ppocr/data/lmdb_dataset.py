@@ -37,7 +37,7 @@ class LMDBDataSet(Dataset):
         if self.do_shuffle:
             np.random.shuffle(self.data_idx_order_list)
         self.ops = create_operators(dataset_config['transforms'], global_config)
-        self.fast_model = fasttext.load_model('/workspace/data/cc.en.300.bin')
+        self.fast_model = fasttext.load_model('./cc.en.300.bin')
 
     def load_hierarchical_lmdb_dataset(self, data_dir):
         lmdb_sets = {}

@@ -3,10 +3,10 @@ Global:
   epoch_num: 400
   log_smooth_window: 20
   print_batch_step: 10
-  save_model_dir: ./output/rec/b3_rare_r34_none_gru/
+  save_model_dir: ./output/rec/seed
   save_epoch_step: 200
   # evaluation is run every 5000 iterations after the 4000th iteration
-  eval_batch_step: [0, 20000]
+  eval_batch_step: [0, 2000]
   cal_metric_during_train: True
   pretrained_model:
   checkpoints:
@@ -76,7 +76,7 @@ Train:
           keep_keys: ['image', 'label', 'length', 'fast_label'] # dataloader will return list in this order
   loader:
     shuffle: True
-    batch_size_per_card: 512
+    batch_size_per_card: 256
     drop_last: True
     num_workers: 8
 
