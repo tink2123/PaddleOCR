@@ -21,6 +21,21 @@ from paddle import nn
 import fasttext
 
 
+class CosineEmbeddingLoss(nn.Layer):
+    def __init__(self, margin=0.):
+        super(CosineEmbeddingLoss, self).__init__()
+        self.margin = margin
+    def forward(self, x1, x2, target):
+        similarity = paddle.fluid.layers.reduce_sum(x1 * x2, dim=-1) / (
+                paddle.norm(x1, axis=-1) * paddle.norm(x2, axis=-1))
+        one_list = paddle.full_like(target, fill_value=1)
+        out =  paddle.fluid.layers.reduce_mean(paddle.where(
+            paddle.equal(target, one_list),
+            1. - similarity,
+            paddle.maximum(paddle.zeros_like(similarity), similarity - self.margin)))
+
+        return out
+
 class AsterLoss(nn.Layer):
     def __init__(self,
                  weight=None,
@@ -36,8 +51,9 @@ class AsterLoss(nn.Layer):
         self.sequence_normalize = sequence_normalize
         self.sample_normalize = sample_normalize
         self.loss_func = paddle.nn.CosineSimilarity()
+        self.loss_sem = CosineEmbeddingLoss()
         #self.fasttext = fasttext.load_model('/workspace/data/cc.en.300.bin')
-
+        self.is_cosin_loss = True
     def forward(self, predicts, batch):
         targets = batch[1].astype("int64")
         label_lengths = batch[2].astype('int64')
@@ -50,9 +66,16 @@ class AsterLoss(nn.Layer):
         # print(embedding_vectors.shape)
         #targets = self.fasttext[targets]
         #print("sem target:", sem_target)
-        sem_loss = 1 - self.loss_func(embedding_vectors, sem_target)
+
+        if not self.is_cosin_loss:
+            sem_loss = self.loss_sem(embedding_vectors, sem_target)
+        else:
+            label_target = paddle.ones([embedding_vectors.shape[0]])
+            sem_loss = self.loss_sem(embedding_vectors, sem_target, label_target)
+
 
         # rec loss
+        print("rec_pred:{},\n rec_targets:{}, \n rec_lengths:{}".format(rec_pred.argmax(axis=2), targets, label_lengths))
         batch_size, num_steps, num_classes = rec_pred.shape[0], rec_pred.shape[
             1], rec_pred.shape[2]
         assert len(targets.shape) == len(list(rec_pred.shape)) - 1, \

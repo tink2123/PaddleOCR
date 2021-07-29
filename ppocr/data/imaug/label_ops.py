@@ -289,9 +289,9 @@ class AttnLabelEncode(BaseRecLabelEncode):
         if len(text) >= self.max_text_len:
             return None
         data['length'] = np.array(len(text))
-        text = [0] + text + [len(self.character) - 1] + [0] * (self.max_text_len
-                                                               - len(text) - 2)
-
+        #text = [0] + text + [len(self.character) - 1] + [0] * (self.max_text_len
+        #                                                       - len(text) - 2)
+        text = text + [len(self.character) - 1] * (self.max_text_len - len(text))
         data['label'] = np.array(text)
         return data
 
