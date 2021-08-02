@@ -364,10 +364,11 @@ def eval(model,
                 break
             images = batch[0]
             start = time.time()
-            if use_srn or model_type == 'table':
-                preds = model(images, data=batch[1:])
-            else:
-                preds = model(images)
+            #if use_srn or model_type == 'table':
+            #    preds = model(images, data=batch[1:])
+            #else:
+            #    preds = model(images)
+            preds = model(images, data=batch[1:])
             batch = [item.numpy() for item in batch]
             # Obtain usable results from post-processing methods
             total_time += time.time() - start

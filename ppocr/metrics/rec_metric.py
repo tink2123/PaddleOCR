@@ -32,6 +32,8 @@ class RecMetric(object):
                 len(pred), len(target), 1)
             if pred == target:
                 correct_num += 1
+            #else:
+            #    print("pred:{}, target:{}".format(pred, target))
             all_num += 1
         self.correct_num += correct_num
         self.all_num += all_num
