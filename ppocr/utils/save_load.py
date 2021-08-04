@@ -81,7 +81,22 @@ def init_model(config, model, optimizer=None, lr_scheduler=None):
                 raise ValueError("Model pretrain path {} does not "
                                  "exists.".format(pretrained))
             param_state_dict = paddle.load(pretrained + '.pdparams')
-            model.set_state_dict(param_state_dict)
+            state_dict = model.state_dict()
+            new_state_dict = {}
+            # for k1, k2 in zip(state_dict.keys(), params.keys()):
+            for k1 in state_dict.keys():
+                if k1 not in param_state_dict:
+                    # print("k1:{}".format(k1))
+                    continue
+                if list(state_dict[k1].shape) == list(param_state_dict[k1]
+                                                      .shape):
+                    new_state_dict[k1] = param_state_dict[k1]
+                else:
+                    print("param:", k1)
+                    print("new_state_dict:{}, params:{}".format(state_dict[
+                        k1].shape, param_state_dict[k1].shape))
+
+            model.set_state_dict(new_state_dict)
             logger.info("load pretrained model from {}".format(
                 pretrained_model))
     else:

@@ -152,8 +152,9 @@ class TPSSpatialTransformer(nn.Layer):
         grid = paddle.clip(grid, 0,
                            1)  # the source_control_points may be out of [0, 1].
         # the input to grid_sample is normalized [-1, 1], but what we get is [0, 1]
-        # grid = 2.0 * grid - 1.0
+        grid = 2.0 * grid - 1.0
         output_maps = grid_sample(input, grid, canvas=None)
+        # print("output_maps:", np.sum(output_maps.numpy()))
         return output_maps, source_coordinate
 
 

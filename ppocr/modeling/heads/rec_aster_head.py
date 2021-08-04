@@ -22,6 +22,10 @@ from paddle import nn
 from paddle.nn import functional as F
 
 
+def sum_x(x):
+    return np.sum(np.abs(x.numpy()))
+
+
 class AsterHead(nn.Layer):
     def __init__(self,
                  in_channels,
@@ -43,11 +47,12 @@ class AsterHead(nn.Layer):
         self.time_step = time_step
         self.embeder = Embedding(self.time_step, in_channels)
         self.beam_width = beam_width
-        self.eos = self.num_classes
+        self.eos = self.num_classes - 1
 
     def forward(self, x, targets=None, embed=None):
         return_dict = {}
         embedding_vectors = self.embeder(x)
+        # print("embedding_vectors:", embedding_vectors)
 
         if self.training:
             rec_targets, rec_lengths, _ = targets
@@ -112,7 +117,6 @@ class AttentionRecognitionHead(nn.Layer):
                     shape=[batch_size], fill_value=self.num_classes)
             else:
                 y_prev = targets[:, i - 1]
-
             output, state = self.decoder(x, state, y_prev)
             outputs.append(output)
         outputs = paddle.concat([_.unsqueeze(1) for _ in outputs], 1)
@@ -207,7 +211,8 @@ class AttentionRecognitionHead(nn.Layer):
             pos_index = paddle.expand_as(pos_index, candidates)
             predecessors = paddle.cast(
                 candidates / self.num_classes + pos_index, dtype='int64')
-            predecessors = paddle.reshape(predecessors, shape=[batch_size * beam_width, 1])
+            predecessors = paddle.reshape(
+                predecessors, shape=[batch_size * beam_width, 1])
             # print("candidates:", candidates.shape)
             # print("pos index:", pos_index.shape)
             # print("predecessors:", predecessors.shape)
@@ -325,21 +330,9 @@ class AttentionUnit(nn.Layer):
         self.xDim = xDim
         self.attDim = attDim
 
-        self.sEmbed = nn.Linear(
-            sDim,
-            attDim,
-            weight_attr=paddle.nn.initializer.Normal(std=0.01),
-            bias_attr=paddle.nn.initializer.Constant(0.0))
-        self.xEmbed = nn.Linear(
-            xDim,
-            attDim,
-            weight_attr=paddle.nn.initializer.Normal(std=0.01),
-            bias_attr=paddle.nn.initializer.Constant(0.0))
-        self.wEmbed = nn.Linear(
-            attDim,
-            1,
-            weight_attr=paddle.nn.initializer.Normal(std=0.01),
-            bias_attr=paddle.nn.initializer.Constant(0.0))
+        self.sEmbed = nn.Linear(sDim, attDim)
+        self.xEmbed = nn.Linear(xDim, attDim)
+        self.wEmbed = nn.Linear(attDim, 1)
 
     def forward(self, x, sPrev):
         batch_size, T, _ = x.shape  # [b x T x xDim]
@@ -358,10 +351,8 @@ class AttentionUnit(nn.Layer):
 
         vProj = self.wEmbed(sumTanh)  # [(b x T) x 1]
         vProj = paddle.reshape(vProj, [batch_size, T])
-
         alpha = F.softmax(
             vProj, axis=1)  # attention weights for each sample in the minibatch
-
         return alpha
 
 
@@ -416,17 +407,41 @@ class DecoderUnit(nn.Layer):
 
 
 if __name__ == "__main__":
+    import numpy as np
+
+    np.random.seed(100)
+
     model = AttentionRecognitionHead(
-        num_classes=20,
-        in_channels=30,
+        in_channels=512,
         sDim=512,
         attDim=512,
         max_len_labels=25,
-        out_channels=38)
+        out_channels=97)
 
-    data = paddle.ones([16, 64, 3])
-    targets = paddle.ones([16, 25])
-    length = paddle.to_tensor(20)
+    params = paddle.load(
+        "../../../train_data/torch2paddle/se_aster_paddle.pdparams")
+    state_dict = model.state_dict()
+    new_state_dict = {}
+    # for k1, k2 in zip(state_dict.keys(), params.keys()):
+    for k1 in state_dict.keys():
+        k2 = "head." + k1
+        if k2 not in params:
+            print("k1:{}, k2:{}".format(k1, k2))
+            continue
+        if list(state_dict[k1].shape) == list(params[k2].shape):
+            new_state_dict[k1] = params[k2]
+        else:
+            print("param:", k2)
+            print("new_state_dict:{}, params:{}".format(state_dict[k1].shape,
+                                                        params[k2].shape))
+    model.set_state_dict(new_state_dict)
+    data = np.random.randn(3, 25, 512).astype("float32") + 300
+    print("data:", np.sum(data))
+    data = paddle.to_tensor(data)
+    targets = paddle.ones([3, 25])
+    length = paddle.to_tensor([4, 4, 4])
     x = [data, targets, length]
-    output = model(x)
-    print(output.shape)
+    emb = paddle.ones([3, 300])
+    output = model(x, emb)
+    print("output shape:", output.shape)
+    print("output:", sum_x(output))

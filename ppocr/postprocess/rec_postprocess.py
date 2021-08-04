@@ -172,22 +172,25 @@ class AttnLabelDecode(BaseRecLabelDecode):
         self.end_str = "eos"
         self.unkonwn = "UNKNOWN"
         dict_character = dict_character
-        dict_character = [self.beg_str] + dict_character + [self.end_str
-                                                            ] #+ [self.unkonwn]
+        #dict_character = [self.beg_str] + dict_character + [self.end_str
+        #                                                    ] #+ [self.unkonwn]
+        dict_character = dict_character + [self.end_str]
         return dict_character
 
     def decode(self, text_index, text_prob=None, is_remove_duplicate=False):
         """ convert text-index into text-label. """
         result_list = []
-        ignored_tokens = self.get_ignored_tokens()
-        [beg_idx, end_idx] = self.get_ignored_tokens()
+        [end_idx] = self.get_ignored_tokens()
+
+        # print("beg_idx:{}, end_idx:{}".format(beg_idx, end_idx))
         batch_size = len(text_index)
         for batch_idx in range(batch_size):
             char_list = []
             conf_list = []
             for idx in range(len(text_index[batch_idx])):
-                if text_index[batch_idx][idx] in ignored_tokens:
-                    continue
+                # if text_index[batch_idx][idx] in ignored_tokens:
+                #     continue
+                #if int(text_index[batch_idx][idx]) == int(end_idx):
                 if int(text_index[batch_idx][idx]) == int(end_idx):
                     break
                 if is_remove_duplicate:
@@ -234,14 +237,13 @@ class AttnLabelDecode(BaseRecLabelDecode):
         return text, label
 
     def get_ignored_tokens(self):
-        beg_idx = self.get_beg_end_flag_idx("beg")
-        end_idx = self.get_beg_end_flag_idx("end")
-        return [beg_idx, end_idx]
+        end_idx = self.get_beg_end_flag_idx("eos")
+        return [end_idx]
 
     def get_beg_end_flag_idx(self, beg_or_end):
-        if beg_or_end == "beg":
+        if beg_or_end == "sos":
             idx = np.array(self.dict[self.beg_str])
-        elif beg_or_end == "end":
+        elif beg_or_end == "eos":
             idx = np.array(self.dict[self.end_str])
         else:
             assert False, "unsupport type %s in get_beg_end_flag_idx" \
