@@ -213,9 +213,7 @@ class AttentionRecognitionHead(nn.Layer):
                 candidates / self.num_classes + pos_index, dtype='int64')
             predecessors = paddle.reshape(
                 predecessors, shape=[batch_size * beam_width, 1])
-            # print("candidates:", candidates.shape)
-            # print("pos index:", pos_index.shape)
-            # print("predecessors:", predecessors.shape)
+
             state = paddle.index_select(
                 state, index=predecessors.squeeze(), axis=1)
 

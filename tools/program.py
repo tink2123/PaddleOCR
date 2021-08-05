@@ -216,9 +216,6 @@ def train(config,
             # else:
             #     preds = model(images)
             preds = model(images, data=batch[1:])
-            state_dict = model.state_dict()
-            # for key in state_dict:
-            #     print(key)
             loss = loss_class(preds, batch)
             avg_loss = loss['loss']
             avg_loss.backward()
