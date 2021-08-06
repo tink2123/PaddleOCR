@@ -51,7 +51,6 @@ class AsterLoss(nn.Layer):
         self.sequence_normalize = sequence_normalize
         self.sample_normalize = sample_normalize
         self.loss_sem = CosineEmbeddingLoss()
-        #self.fasttext = fasttext.load_model('/workspace/data/cc.en.300.bin')
         self.is_cosin_loss = True
         self.loss_func_rec = nn.CrossEntropyLoss(weight=None, reduction='none')
     def forward(self, predicts, batch):
@@ -77,12 +76,9 @@ class AsterLoss(nn.Layer):
 
         # rec loss
         #print("rec_pred:{},\n rec_targets:{}, \n rec_lengths:{}".format(rec_pred.argmax(axis=2), targets, label_lengths))
-        batch_size, num_steps, num_classes = rec_pred.shape[0], rec_pred.shape[
-            1], rec_pred.shape[2]
-        assert len(targets.shape) == len(list(rec_pred.shape)) - 1, \
-            "The target's shape and inputs's shape is [N, d] and [N, num_steps]"
+        batch_size, def_max_length = targets.shape[0], targets.shape[1]
 
-        mask = paddle.zeros([batch_size, num_steps])
+        mask = paddle.zeros([batch_size, def_max_length])
         for i in range(batch_size):
             mask[i, :label_lengths[i]] = 1
         mask = paddle.cast(mask, "float32")
@@ -90,7 +86,7 @@ class AsterLoss(nn.Layer):
         assert max_length == rec_pred.shape[1]
         targets = targets[:, :max_length]
         mask = mask[:, :max_length]
-        rec_pred = paddle.reshape(rec_pred, [-1, rec_pred.shape[-1]])
+        rec_pred = paddle.reshape(rec_pred, [-1, rec_pred.shape[2]])
         input = nn.functional.log_softmax(rec_pred, axis=1)
         targets = paddle.reshape(targets, [-1, 1])
         mask = paddle.reshape(mask, [-1, 1])
