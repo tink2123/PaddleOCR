@@ -325,7 +325,9 @@ class STN_ON(nn.Layer):
         stn_input = paddle.nn.functional.interpolate(
             image, self.tps_inputsize, mode="bilinear", align_corners=True)
         stn_img_feat, ctrl_points = self.stn_head(stn_input)
+        print("stn_img_feat:{}, ctrl_points:{}".format(
+            np.sum(stn_img_feat.numpy()), np.sum(ctrl_points.numpy())))
         x, _ = self.tps(image, ctrl_points)
-        #print("x:", np.sum(x.numpy()))
+        print("x:", np.sum(x.numpy()))
         # print(x.shape)
         return x

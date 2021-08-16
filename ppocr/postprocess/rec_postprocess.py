@@ -172,8 +172,9 @@ class AttnLabelDecode(BaseRecLabelDecode):
         self.end_str = "eos"
         self.unkonwn = "UNKNOWN"
         dict_character = dict_character
-        # dict_character = dict_character + [self.end_str] + [self.beg_str] + [self.unkonwn]
-        dict_character = dict_character + [self.end_str]
+        dict_character = dict_character + [self.end_str] + [self.beg_str
+                                                            ] + [self.unkonwn]
+        # dict_character = dict_character + [self.end_str]
         return dict_character
 
     def decode(self, text_index, text_prob=None, is_remove_duplicate=False):

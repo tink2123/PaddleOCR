@@ -20,8 +20,13 @@ from ppocr.modeling.transforms import build_transform
 from ppocr.modeling.backbones import build_backbone
 from ppocr.modeling.necks import build_neck
 from ppocr.modeling.heads import build_head
+import numpy as np
 
 __all__ = ['BaseModel']
+
+
+def sum_x(x):
+    return np.sum(x.numpy())
 
 
 class BaseModel(nn.Layer):
@@ -73,11 +78,13 @@ class BaseModel(nn.Layer):
         y = dict()
         if self.use_transform:
             x = self.transform(x)
+        print("tps out:", sum_x(x))
         x = self.backbone(x)
         y["backbone_out"] = x
         if self.use_neck:
             x = self.neck(x)
         y["neck_out"] = x
+        print("backbone out:", sum_x(x))
         x = self.head(x, targets=data)
         y["head_out"] = x
         if self.return_all_feats:

@@ -141,7 +141,7 @@ class TPSSpatialTransformer(nn.Layer):
 
         self.padding_matrix = paddle.expand(
             self.padding_matrix, shape=[batch_size, 3, 2])
-        Y = paddle.concat([source_control_points, self.padding_matrix], 1)
+        Y = paddle.concat([source_control_points, self.padding_matrix], axis=1)
         mapping_matrix = paddle.matmul(self.inverse_kernel, Y)
         source_coordinate = paddle.matmul(self.target_coordinate_repr,
                                           mapping_matrix)

@@ -25,16 +25,21 @@ class CosineEmbeddingLoss(nn.Layer):
     def __init__(self, margin=0.):
         super(CosineEmbeddingLoss, self).__init__()
         self.margin = margin
+
     def forward(self, x1, x2, target):
-        similarity = paddle.fluid.layers.reduce_sum(x1 * x2, dim=-1) / (
-                paddle.norm(x1, axis=-1) * paddle.norm(x2, axis=-1))
+        similarity = paddle.fluid.layers.reduce_sum(
+            x1 * x2, dim=-1) / (paddle.norm(
+                x1, axis=-1) * paddle.norm(
+                    x2, axis=-1))
         one_list = paddle.full_like(target, fill_value=1)
-        out =  paddle.fluid.layers.reduce_mean(paddle.where(
-            paddle.equal(target, one_list),
-            1. - similarity,
-            paddle.maximum(paddle.zeros_like(similarity), similarity - self.margin)))
+        out = paddle.fluid.layers.reduce_mean(
+            paddle.where(
+                paddle.equal(target, one_list), 1. - similarity,
+                paddle.maximum(
+                    paddle.zeros_like(similarity), similarity - self.margin)))
 
         return out
+
 
 class AsterLoss(nn.Layer):
     def __init__(self,
@@ -53,13 +58,15 @@ class AsterLoss(nn.Layer):
         self.loss_sem = CosineEmbeddingLoss()
         self.is_cosin_loss = True
         self.loss_func_rec = nn.CrossEntropyLoss(weight=None, reduction='none')
+
     def forward(self, predicts, batch):
-        targets = batch[1].astype("int64")
+        targets = batch[0].astype("int64")
         #print("targets shape:", targets.shape)
-        label_lengths = batch[2].astype('int64')
-        sem_target = batch[3].astype('float32')
-        embedding_vectors = predicts['embedding_vectors']
-        rec_pred = predicts['rec_pred']
+        label_lengths = batch[1].astype('int64')
+        # sem_target = batch[2].astype('float32')
+        # embedding_vectors = predicts['embedding_vectors']
+        # rec_pred = predicts['rec_pred']
+        rec_pred = predicts
         #print("pred:{}, target:{}, lengths:{}".format(rec_pred.shape, targets.shape, label_lengths.shape))
         # semantic loss
         # print(embedding_vectors)
@@ -67,12 +74,11 @@ class AsterLoss(nn.Layer):
         #targets = self.fasttext[targets]
         #print("sem target:", sem_target)
 
-        if not self.is_cosin_loss:
-            sem_loss = paddle.sum(self.loss_sem(embedding_vectors, sem_target))
-        else:
-            label_target = paddle.ones([embedding_vectors.shape[0]])
-            sem_loss = paddle.sum(self.loss_sem(embedding_vectors, sem_target, label_target))
-
+        # if not self.is_cosin_loss:
+        #     sem_loss = paddle.sum(self.loss_sem(embedding_vectors, sem_target))
+        # else:
+        #     label_target = paddle.ones([embedding_vectors.shape[0]])
+        #     sem_loss = paddle.sum(self.loss_sem(embedding_vectors, sem_target, label_target))
 
         # rec loss
         #print("rec_pred:{},\n rec_targets:{}, \n rec_lengths:{}".format(rec_pred.argmax(axis=2), targets, label_lengths))
@@ -102,5 +108,6 @@ class AsterLoss(nn.Layer):
         #targets = paddle.reshape(targets, [-1])
         #print("rec_pred_shape:{}, targets_shape:{}".format(rec_pred.shape, targets.shape))
         #rec_loss = paddle.sum(self.loss_func_rec(rec_pred, targets))
-        loss = output + sem_loss * 0.1
+        # loss = output + sem_loss * 0.1
+        loss = output
         return {'loss': loss}  # , 'sem_loss':sem_loss}

@@ -100,8 +100,11 @@ class STN(nn.Layer):
         x = self.stn_convnet(x)
         batch_size, _, h, w = x.shape
         x = paddle.reshape(x, shape=(batch_size, -1))
+        print("input x:", np.sum(x.numpy()))
         img_feat = self.stn_fc1(x)
         x = self.stn_fc2(0.1 * img_feat)
+        print("img_feat:", np.sum(img_feat.numpy()))
+        print("stn_fc2:", np.sum(x.numpy()))
         if self.activation == 'sigmoid':
             x = F.sigmoid(x)
         x = paddle.reshape(x, shape=[-1, self.num_ctrlpoints, 2])

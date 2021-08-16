@@ -20,10 +20,12 @@ import sys
 import paddle
 from paddle import nn
 from paddle.nn import functional as F
+import numpy as np
+from ppocr.losses.rec_aster_loss import AsterLoss
 
 
 def sum_x(x):
-    return np.sum(np.abs(x.numpy()))
+    return np.sum(x.numpy())
 
 
 class AsterHead(nn.Layer):
@@ -48,11 +50,13 @@ class AsterHead(nn.Layer):
         self.embeder = Embedding(self.time_step, in_channels)
         self.beam_width = beam_width
         self.eos = self.num_classes - 1
+        self.loss = AsterLoss()
 
     def forward(self, x, targets=None, embed=None):
+        import numpy as np
         return_dict = {}
         embedding_vectors = self.embeder(x)
-        # print("embedding_vectors:", embedding_vectors)
+        print("embedding_vectors:", np.sum(embedding_vectors.numpy()))
 
         if self.training:
             rec_targets, rec_lengths, _ = targets
@@ -61,8 +65,36 @@ class AsterHead(nn.Layer):
             return_dict['rec_pred'] = rec_pred
             return_dict['embedding_vectors'] = embedding_vectors
         else:
+            import string
+            label_str = "PAIN"
+            char_list = string.printable[:-6]
+            char_dict = {}
+            for i, char in enumerate(char_list):
+                char_dict[char] = i
+            text_list = []
+            for char in label_str:
+                text_list.append(char_dict[char])
+            rec_lengths = np.array([4])[np.newaxis, :]
+            rec_lengths = paddle.to_tensor(rec_lengths, dtype="int64")
+            text_list = text_list + [94] * (100 - 4)
+            text = np.array(text_list)[np.newaxis, :]
+            rec_targets = paddle.to_tensor(text, dtype="int64")
+
             rec_pred, rec_pred_scores = self.decoder.beam_search(
                 x, self.beam_width, self.eos, embedding_vectors)
+            rec_pred_ = self.decoder([x, rec_targets, rec_lengths],
+                                     embedding_vectors)
+            print(
+                "encoder_feats:{}, rec_targets:{}, rec_lengths:{}, embedding_vectors:{}".
+                format(
+                    sum_x(x),
+                    sum_x(rec_targets),
+                    sum_x(rec_lengths), sum_x(embedding_vectors)))
+            print("loss:", sum_x(rec_pred_))
+            batch = [rec_targets, rec_lengths, None]
+            loss = self.loss(rec_pred_, batch)
+            print(loss)
+
             return_dict['rec_pred'] = rec_pred
             return_dict['rec_pred_scores'] = rec_pred_scores
             return_dict['embedding_vectors'] = embedding_vectors
@@ -105,21 +137,26 @@ class AttentionRecognitionHead(nn.Layer):
             sDim=sDim, xDim=in_channels, yDim=self.num_classes, attDim=attDim)
 
     def forward(self, x, embed):
+        print("=========== attention unit =======")
         x, targets, lengths = x
         batch_size = paddle.shape(x)[0]
         # Decoder
         state = self.decoder.get_initial_state(embed)
+        print('state:', np.sum(state.numpy()))
         outputs = []
-
         for i in range(max(lengths)):
             if i == 0:
                 y_prev = paddle.full(
-                    shape=[batch_size], fill_value=self.num_classes-1)
+                    shape=[batch_size], fill_value=self.num_classes)
             else:
                 y_prev = targets[:, i - 1]
+            # print("===============")
+            # print("y_prev shape:", state.shape)
             output, state = self.decoder(x, state, y_prev)
+            print("output:{}, state:{}".format(sum_x(output), sum_x(state)))
             outputs.append(output)
         outputs = paddle.concat([_.unsqueeze(1) for _ in outputs], 1)
+        print("encoder_feats:", sum_x(outputs))
         return outputs
 
     # inference stage.
@@ -133,7 +170,7 @@ class AttentionRecognitionHead(nn.Layer):
         for i in range(self.max_len_labels):
             if i == 0:
                 y_prev = paddle.full(
-                    shape=[batch_size], fill_value=self.num_classes-1)
+                    shape=[batch_size], fill_value=self.num_classes - 1)
             else:
                 y_prev = predicted
 
@@ -148,6 +185,8 @@ class AttentionRecognitionHead(nn.Layer):
         return predicted_ids, predicted_scores
 
     def beam_search(self, x, beam_width, eos, embed):
+        print("======= beam search ======")
+
         def _inflate(tensor, times, dim):
             repeat_dims = [1] * tensor.dim()
             repeat_dims[dim] = times
@@ -179,7 +218,7 @@ class AttentionRecognitionHead(nn.Layer):
 
         # Initialize the input vector
         y_prev = paddle.full(
-            shape=[batch_size * beam_width], fill_value=self.num_classes-1)
+            shape=[batch_size * beam_width], fill_value=self.num_classes)
 
         # Store decisions for backtracking
         stored_scores = list()
@@ -187,10 +226,8 @@ class AttentionRecognitionHead(nn.Layer):
         stored_emitted_symbols = list()
 
         for i in range(self.max_len_labels):
-            # print("encoder:{}, state:{}, y_prev:{}".format(inflated_encoder_feats.shape, state.shape, y_prev.shape))
             output, state = self.decoder(inflated_encoder_feats, state, y_prev)
             state = paddle.unsqueeze(state, axis=0)
-            # print("output:{}, state:{}".format(output.shape, state.shape))
             log_softmax_output = paddle.nn.functional.log_softmax(
                 output, axis=1)
 
@@ -252,8 +289,6 @@ class AttentionRecognitionHead(nn.Layer):
             paddle.reshape(
                 stored_scores[-1], shape=[batch_size, beam_width]),
             beam_width)
-        # print("sorted_score:", sorted_score)
-        # print("scorted idx:", sorted_idx)
 
         # initialize the sequence scores with the sorted last step beam scores
         s = sorted_score.clone()
@@ -338,14 +373,19 @@ class AttentionUnit(nn.Layer):
         self.wEmbed = nn.Linear(attDim, 1)
 
     def forward(self, x, sPrev):
+        # print("===== in attention unit ======")
         batch_size, T, _ = x.shape  # [b x T x xDim]
         x = paddle.reshape(x, [-1, self.xDim])  # [(b x T) x xDim]
         xProj = self.xEmbed(x)  # [(b x T) x attDim]
         xProj = paddle.reshape(xProj, [batch_size, T, -1])  # [b x T x attDim]
 
         sPrev = sPrev.squeeze(0)
+        #print("bofore embed:", sPrev.shape)
         sProj = self.sEmbed(sPrev)  # [b x attDim]
+        #print("bofore sequeeze:", sProj.shape)
         sProj = paddle.unsqueeze(sProj, 1)  # [b x 1 x attDim]
+        #print("sProj shape:", sProj.shape)
+        #print("expand shape:",[batch_size, T, self.attDim])
         sProj = paddle.expand(sProj,
                               [batch_size, T, self.attDim])  # [b x T x attDim]
 
@@ -356,6 +396,7 @@ class AttentionUnit(nn.Layer):
         vProj = paddle.reshape(vProj, [batch_size, T])
         alpha = F.softmax(
             vProj, axis=1)  # attention weights for each sample in the minibatch
+        #print("alpha shape:", alpha.shape)
         return alpha
 
 
@@ -381,6 +422,7 @@ class DecoderUnit(nn.Layer):
         self.embed_fc = nn.Linear(300, self.sDim)
 
     def get_initial_state(self, embed, tile_times=1):
+        print("tile_times:{}, sDim:{}".format(tile_times, self.sDim))
         assert embed.shape[1] == 300
         state = self.embed_fc(embed)  # N * sDim
         if tile_times != 1:
@@ -390,11 +432,15 @@ class DecoderUnit(nn.Layer):
             trans_state = paddle.transpose(state, perm=[1, 0, 2])
             state = paddle.reshape(trans_state, shape=[-1, self.sDim])
         state = state.unsqueeze(0)  # 1 * N * sDim
+        print("total_state:", sum_x(state))
         return state
 
     def forward(self, x, sPrev, yPrev):
         # x: feature sequence from the image decoder.
+        print("x:{}, sPrev:{}, yPrev:{}".format(
+            sum_x(x), sum_x(sPrev), sum_x(yPrev)))
         batch_size, T, _ = x.shape
+        # print("batch:", batch_size)
         alpha = self.attention_unit(x, sPrev)
         context = paddle.squeeze(paddle.matmul(alpha.unsqueeze(1), x), axis=1)
         yPrev = paddle.cast(yPrev, dtype="int64")
@@ -403,9 +449,14 @@ class DecoderUnit(nn.Layer):
         concat_context = paddle.concat([yProj, context], 1)
         concat_context = paddle.squeeze(concat_context, 1)
         sPrev = paddle.squeeze(sPrev, 0)
+        print("concat_context:{}, sPrev:{}".format(
+            sum_x(concat_context), sum_x(sPrev)))
         output, state = self.gru(concat_context, sPrev)
         output = paddle.squeeze(output, axis=1)
+        if state.shape[0] == 1:
+            state = paddle.unsqueeze(state, axis=0)
         output = self.fc(output)
+
         return output, state
 
 
