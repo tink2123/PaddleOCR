@@ -56,6 +56,7 @@ class LMDBDataSet(Dataset):
                 lmdb_sets[dataset_idx] = {"dirpath":dirpath, "env":env, \
                     "txn":txn, "num_samples":num_samples}
                 dataset_idx += 1
+                print({"dirpath:":dirpath, "num_samples:":num_samples})
         return lmdb_sets
 
     def dataset_traversal(self):

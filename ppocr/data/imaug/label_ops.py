@@ -277,8 +277,9 @@ class AttnLabelEncode(BaseRecLabelEncode):
         self.beg_str = "sos"
         self.end_str = "eos"
         self.unknown = "UNKNOWN"
-        #dict_character = [self.beg_str] + dict_character + [self.end_str
-        #                                                    ] # + [self.unknown]
+        # dict_character = dict_character + [self.unknown] + [self.beg_str
+        #                                                     ]  + [self.end_str]
+        # dict_character = dict_character + [self.end_str] + [self.beg_str] + [self.unknown]
         dict_character = dict_character + [self.end_str]
         return dict_character
 
@@ -289,7 +290,7 @@ class AttnLabelEncode(BaseRecLabelEncode):
             return None
         if len(text) >= self.max_text_len:
             return None
-        data['length'] = np.array(len(text))
+        data['length'] = np.array(len(text)) + 1 # conclue eos
         #text = [0] + text + [len(self.character) - 1] + [0] * (self.max_text_len
         #                                                       - len(text) - 2)
         text = text + [len(self.character) - 1] * (self.max_text_len - len(text)

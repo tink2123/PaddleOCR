@@ -172,8 +172,7 @@ class AttnLabelDecode(BaseRecLabelDecode):
         self.end_str = "eos"
         self.unkonwn = "UNKNOWN"
         dict_character = dict_character
-        #dict_character = [self.beg_str] + dict_character + [self.end_str
-        #                                                    ] #+ [self.unkonwn]
+        # dict_character = dict_character + [self.end_str] + [self.beg_str] + [self.unkonwn]
         dict_character = dict_character + [self.end_str]
         return dict_character
 
@@ -228,9 +227,10 @@ class AttnLabelDecode(BaseRecLabelDecode):
         else:
             preds_idx = preds["rec_pred"].argmax(axis=2)
             preds_prob = preds["rec_pred"].max(axis=2)
+        # print("pred:", preds_idx)
         text = self.decode(preds_idx, preds_prob, is_remove_duplicate=False)
-        # print("pred:", text)
-        # print("label:", label)
+        #print("pred:", text)
+        #print("label:", label)
         if label is None:
             return text
         label = self.decode(label, is_remove_duplicate=False)

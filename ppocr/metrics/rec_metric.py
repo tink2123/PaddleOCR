@@ -26,13 +26,14 @@ class RecMetric(object):
         all_num = 0
         norm_edit_dis = 0.0
         for (pred, pred_conf), (target, _) in zip(preds, labels):
-            pred = pred.replace(" ", "")
-            target = target.replace(" ", "")
+            pred = pred.replace(" ", "").lower()
+            target = target.replace(" ", "").lower()
+            # pred = pred[:len(target)]
             norm_edit_dis += Levenshtein.distance(pred, target) / max(
                 len(pred), len(target), 1)
             if pred == target:
                 correct_num += 1
-            #else:
+            # else:
             #    print("pred:{}, target:{}".format(pred, target))
             all_num += 1
         self.correct_num += correct_num

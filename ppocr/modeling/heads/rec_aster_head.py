@@ -114,7 +114,7 @@ class AttentionRecognitionHead(nn.Layer):
         for i in range(max(lengths)):
             if i == 0:
                 y_prev = paddle.full(
-                    shape=[batch_size], fill_value=self.num_classes)
+                    shape=[batch_size], fill_value=self.num_classes-1)
             else:
                 y_prev = targets[:, i - 1]
             output, state = self.decoder(x, state, y_prev)
@@ -133,7 +133,7 @@ class AttentionRecognitionHead(nn.Layer):
         for i in range(self.max_len_labels):
             if i == 0:
                 y_prev = paddle.full(
-                    shape=[batch_size], fill_value=self.num_classes)
+                    shape=[batch_size], fill_value=self.num_classes-1)
             else:
                 y_prev = predicted
 
@@ -179,7 +179,7 @@ class AttentionRecognitionHead(nn.Layer):
 
         # Initialize the input vector
         y_prev = paddle.full(
-            shape=[batch_size * beam_width], fill_value=self.num_classes)
+            shape=[batch_size * beam_width], fill_value=self.num_classes-1)
 
         # Store decisions for backtracking
         stored_scores = list()
@@ -227,7 +227,12 @@ class AttentionRecognitionHead(nn.Layer):
             mask = eos_prev == y_prev
             mask = paddle.nonzero(mask)
             if mask.dim() > 0:
+                # print("=========== mask dim > 0 ===========")
+                sequence_scores = sequence_scores.numpy()
+                mask = mask.numpy()
                 sequence_scores[mask] = -float('inf')
+                maks = paddle.to_tensor(mask)
+                sequence_scores = paddle.to_tensor(sequence_scores)
 
             # Cache results for backtracking
             stored_predecessors.append(predecessors)
@@ -263,9 +268,6 @@ class AttentionRecognitionHead(nn.Layer):
             shape=[batch_size * beam_width])
         while t >= 0:
             # Re-order the variables with the back pointer
-            # print("stored emmitted:", stored_emitted_symbols[t])
-            # print("stored prede:", stored_predecessors[t])
-            # print("index:", t_predecessors)
             current_symbol = paddle.index_select(
                 stored_emitted_symbols[t], index=t_predecessors, axis=0)
             t_predecessors = paddle.index_select(
@@ -291,7 +293,8 @@ class AttentionRecognitionHead(nn.Layer):
                     # with the new ended sequence information
                     t_predecessors[res_idx] = stored_predecessors[t][idx[0]]
                     current_symbol[res_idx] = stored_emitted_symbols[t][idx[0]]
-                    s[b_idx, res_k_idx] = stored_scores[t][idx[0], [0]]
+                    #s[b_idx, res_k_idx] = stored_scores[t][idx[0], [0]]
+                    s[b_idx, res_k_idx] = stored_scores[t][idx[0], 0]
                     l[b_idx][res_k_idx] = t + 1
 
             # record the back tracked results
