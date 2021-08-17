@@ -114,7 +114,7 @@ class AttentionRecognitionHead(nn.Layer):
         for i in range(max(lengths)):
             if i == 0:
                 y_prev = paddle.full(
-                    shape=[batch_size], fill_value=self.num_classes-1)
+                    shape=[batch_size], fill_value=self.num_classes)
             else:
                 y_prev = targets[:, i - 1]
             output, state = self.decoder(x, state, y_prev)
@@ -133,7 +133,7 @@ class AttentionRecognitionHead(nn.Layer):
         for i in range(self.max_len_labels):
             if i == 0:
                 y_prev = paddle.full(
-                    shape=[batch_size], fill_value=self.num_classes-1)
+                    shape=[batch_size], fill_value=self.num_classes)
             else:
                 y_prev = predicted
 
@@ -179,7 +179,7 @@ class AttentionRecognitionHead(nn.Layer):
 
         # Initialize the input vector
         y_prev = paddle.full(
-            shape=[batch_size * beam_width], fill_value=self.num_classes-1)
+            shape=[batch_size * beam_width], fill_value=self.num_classes)
 
         # Store decisions for backtracking
         stored_scores = list()
