@@ -416,6 +416,7 @@ def preprocess(is_train=False):
             yaml.dump(
                 dict(config), f, default_flow_style=False, sort_keys=False)
         log_file = '{}/train.log'.format(save_model_dir)
+        print("log has save in {}/train.log".format(save_model_dir))
     else:
         log_file = None
     logger = get_logger(name='root', log_file=log_file)
