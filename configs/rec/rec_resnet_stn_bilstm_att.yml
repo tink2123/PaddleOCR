@@ -3,7 +3,7 @@ Global:
   epoch_num: 400
   log_smooth_window: 20
   print_batch_step: 10
-  save_model_dir: ./output/rec/seed
+  save_model_dir: ./output/rec/seed_nopadding
   save_epoch_step: 3
   # evaluation is run every 5000 iterations after the 4000th iteration
   eval_batch_step: [0, 2000]
@@ -74,7 +74,7 @@ Train:
           img_mode: BGR
           channel_first: False
       - AttnLabelEncode: # Class handling label
-      - RecResizeImg:
+      - SEEDResize:
           image_shape: [3, 64, 256]
       - KeepKeys:
           keep_keys: ['image', 'label', 'length', 'fast_label'] # dataloader will return list in this order
@@ -94,12 +94,12 @@ Eval:
           img_mode: BGR
           channel_first: False
       - AttnLabelEncode: # Class handling label
-      - RecResizeImg:
+      - SEEDResize:
           image_shape: [3, 64, 256]
       - KeepKeys:
           keep_keys: ['image', 'label', 'length', 'fast_label'] # dataloader will return list in this order
   loader:
-    shuffle: True
+    shuffle: False
     drop_last: True
     batch_size_per_card: 256
     num_workers: 4
