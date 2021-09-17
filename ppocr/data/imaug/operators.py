@@ -23,7 +23,18 @@ import sys
 import six
 import cv2
 import numpy as np
+import fasttext
 
+class Fasttext(object):
+    def __init__(self, path="None", **kwargs):
+        self.fast_model = fasttext.load_model(path)
+        print("load fast model")
+
+    def __call__(self, data):
+        label = data['label']
+        fast_label = self.fast_model[label]
+        data['fast_label'] = fast_label
+        return data
 
 class DecodeImage(object):
     """ decode image """

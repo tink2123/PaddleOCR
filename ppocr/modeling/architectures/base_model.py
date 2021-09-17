@@ -75,7 +75,7 @@ class BaseModel(nn.Layer):
         x = self.backbone(x)
         y["backbone_out"] = x
         if self.use_neck:
-            x = self.neck(x)
+            x = self.neck(x, targets=data)
         y["neck_out"] = x
         x = self.head(x, targets=data)
         if isinstance(x, dict):

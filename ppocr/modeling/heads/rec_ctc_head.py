@@ -32,6 +32,22 @@ def get_para_bias_attr(l2_decay, k):
     return [weight_attr, bias_attr]
 
 
+class Embedding(nn.Layer):
+    def __init__(self, in_timestep, in_planes, mid_dim=4096, embed_dim=300):
+        super(Embedding, self).__init__()
+        self.in_timestep = in_timestep
+        self.in_planes = in_planes
+        self.embed_dim = embed_dim
+        self.mid_dim = mid_dim
+        self.eEmbed = nn.Linear(
+            in_planes*in_timestep,
+            self.embed_dim)  # Embed encoder output to a word-embedding like
+
+    def forward(self, x):
+        x = paddle.reshape(x, [paddle.shape(x)[0], -1])
+        x = self.eEmbed(x)
+        return x
+
 class CTCHead(nn.Layer):
     def __init__(self,
                  in_channels,
@@ -66,14 +82,20 @@ class CTCHead(nn.Layer):
                 bias_attr=bias_attr2)
         self.out_channels = out_channels
         self.mid_channels = mid_channels
+        self.embeder = Embedding(80, in_channels)
 
     def forward(self, x, targets=None):
+        return_dict = {}
+        embedding_vectors = self.embeder(x)
         if self.mid_channels is None:
             predicts = self.fc(x)
+            return_dict['rec_pred'] = predicts
+            return_dict['embedding_vectors'] = embedding_vectors
         else:
             predicts = self.fc1(x)
             predicts = self.fc2(predicts)
             
         if not self.training:
             predicts = F.softmax(predicts, axis=2)
-        return predicts
+            return_dict['rec_pred'] = predicts
+        return return_dict

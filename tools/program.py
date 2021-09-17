@@ -215,10 +215,11 @@ def train(config,
             images = batch[0]
             if use_srn:
                 model_average = True
-            if use_srn or model_type == 'table' or use_nrtr:
-                preds = model(images, data=batch[1:])
-            else:
-                preds = model(images)
+            # if use_srn or model_type == 'table' or use_nrtr:
+            #     preds = model(images, data=batch[1:])
+            # else:
+            #     preds = model(images)
+            preds = model(images, data=batch[1:])
             loss = loss_class(preds, batch)
             avg_loss = loss['loss']
             avg_loss.backward()
@@ -232,7 +233,8 @@ def train(config,
                 lr_scheduler.step()
 
             # logger and visualdl
-            stats = {k: v.numpy().mean() for k, v in loss.items()}
+            # stats = {k: v.numpy().mean() for k, v in loss.items()}
+            stats = {'loss':avg_loss.numpy()}
             stats['lr'] = lr
             train_stats.update(stats)
 

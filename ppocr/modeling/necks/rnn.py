@@ -17,6 +17,7 @@ from __future__ import division
 from __future__ import print_function
 
 from paddle import nn
+import paddle
 
 from ppocr.modeling.heads.rec_ctc_head import get_para_bias_attr
 
@@ -37,13 +38,38 @@ class Im2Seq(nn.Layer):
 class EncoderWithRNN(nn.Layer):
     def __init__(self, in_channels, hidden_size):
         super(EncoderWithRNN, self).__init__()
+        self.hidden_size = hidden_size
         self.out_channels = hidden_size * 2
         self.lstm = nn.LSTM(
             in_channels, hidden_size, direction='bidirectional', num_layers=2)
 
-    def forward(self, x):
-        x, _ = self.lstm(x)
+        self.embed_fc = nn.Linear(300, hidden_size)
+
+    def get_initial_state(self, embed, tile_times=1):
+        assert embed.shape[1] == 300
+        state = self.embed_fc(embed)  # N * sDim
+        state = state.unsqueeze(1)
+        trans_state = paddle.transpose(state, perm=[1, 0, 2]) # (1,4,384)
+        # print("trans state:", trans_state.shape)
+        state = paddle.tile(trans_state, repeat_times=[tile_times, 1, 1])  # (4,4,384)
+        # print("state shape:", state.shape)
+        # trans_state = paddle.transpose(state, perm=[1, 0, 2])  # (4,4,384)
+        # print("train state:", trans_state.shape)
+        # print("hidden_size:", self.hidden_size)
+        # state = paddle.reshape(trans_state, shape=[4, -1, self.hidden_size])
+        return state
+
+    def forward(self, x, embed=None):
+        if self.training:
+            # print("x shape:", x.shape)
+            # print("x.shape[0]", x.shape[0])
+            prev_h = self.get_initial_state(embed, 4)
+            prev_c = paddle.zeros(shape=[4, x.shape[0], self.hidden_size])
+            x, _ = self.lstm(inputs=x, initial_states=(prev_h, prev_c))
+        else:
+            x, _ = self.lstm(x)
         return x
+
 
 
 class EncoderWithFC(nn.Layer):
@@ -85,8 +111,15 @@ class SequenceEncoder(nn.Layer):
             self.out_channels = self.encoder.out_channels
             self.only_reshape = False
 
-    def forward(self, x):
-        x = self.encoder_reshape(x)
-        if not self.only_reshape:
-            x = self.encoder(x)
+    def forward(self, x, targets=None):
+        if self.training:
+            label, length, emb = targets
+            x = self.encoder_reshape(x)
+            emb.stop_gradient=True
+            if not self.only_reshape:
+                x = self.encoder(x, emb)
+        else:
+            x = self.encoder_reshape(x)
+            if not self.only_reshape:
+                x = self.encoder(x, None)
         return x
