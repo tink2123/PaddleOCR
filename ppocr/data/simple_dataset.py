@@ -20,10 +20,12 @@ from .imaug import transform, create_operators
 
 
 class SimpleDataSet(Dataset):
-    def __init__(self, config, mode, logger, seed=None):
+    def __init__(self, config, mode, logger, fast_model, seed=None):
         super(SimpleDataSet, self).__init__()
         self.logger = logger
         self.mode = mode.lower()
+        self.fast_model = fast_model
+        print("self.fast model:", self.fast_model)
 
         global_config = config['Global']
         dataset_config = config[mode]['dataset']
@@ -114,6 +116,9 @@ class SimpleDataSet(Dataset):
             with open(data['img_path'], 'rb') as f:
                 img = f.read()
                 data['image'] = img
+                if self.fast_model is not None:
+                    fast_label = self.fast_model[label]
+                    data['fast_label'] = fast_label
             data['ext_data'] = self.get_ext_data()
             outs = transform(data, self.ops)
         except Exception as e:

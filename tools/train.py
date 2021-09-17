@@ -37,6 +37,7 @@ from ppocr.postprocess import build_post_process
 from ppocr.metrics import build_metric
 from ppocr.utils.save_load import init_model, load_dygraph_params
 import tools.program as program
+import fasttext
 
 dist.get_world_size()
 
@@ -48,8 +49,11 @@ def main(config, device, logger, vdl_writer):
 
     global_config = config['Global']
 
+    fast_model = fasttext.load_model("./cc.zh.300.bin")
+    print("init fast_model:", fast_model)
+
     # build dataloader
-    train_dataloader = build_dataloader(config, 'Train', device, logger)
+    train_dataloader = build_dataloader(config, 'Train', device, logger, fast_model, None)
     if len(train_dataloader) == 0:
         logger.error(
             "No Images in train dataset, please ensure\n" +
@@ -60,7 +64,7 @@ def main(config, device, logger, vdl_writer):
         return
 
     if config['Eval']:
-        valid_dataloader = build_dataloader(config, 'Eval', device, logger)
+        valid_dataloader = build_dataloader(config, 'Eval', device, logger, fast_model, None)
     else:
         valid_dataloader = None
 
@@ -103,7 +107,7 @@ def main(config, device, logger, vdl_writer):
         logger.info('valid dataloader has {} iters'.format(
             len(valid_dataloader)))
     # start train
-    program.train(config, train_dataloader, valid_dataloader, device, model,
+    program.train(config, fast_model, valid_dataloader, device, model,
                   loss_class, optimizer, lr_scheduler, post_process_class,
                   eval_class, pre_best_model_dict, logger, vdl_writer)
 

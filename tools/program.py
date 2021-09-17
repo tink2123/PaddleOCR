@@ -140,7 +140,7 @@ def check_gpu(use_gpu):
 
 
 def train(config,
-          train_dataloader,
+          fast_model,
           valid_dataloader,
           device,
           model,
@@ -200,7 +200,7 @@ def train(config,
 
     for epoch in range(start_epoch, epoch_num + 1):
         train_dataloader = build_dataloader(
-            config, 'Train', device, logger, seed=epoch)
+            config, 'Train', device, logger, fast_model , seed=epoch)
         train_batch_cost = 0.0
         train_reader_cost = 0.0
         batch_sum = 0
