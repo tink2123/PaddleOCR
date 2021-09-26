@@ -43,10 +43,10 @@ Architecture:
   Backbone:
     name: MobileNetV1Enhance
     scale: 0.5
-  Neck:
-    name: SequenceEncoder
-    encoder_type: rnn
-    hidden_size: 64
+  # Neck:
+  #   name: SequenceEncoder
+  #   encoder_type: rnn
+  #   hidden_size: 64
   Head:
     name: CTCHead
     mid_channels: 96

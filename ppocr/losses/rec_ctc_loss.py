@@ -28,6 +28,7 @@ class CTCLoss(nn.Layer):
     def forward(self, predicts, batch):
         predicts = predicts.transpose((1, 0, 2))
         N, B, _ = predicts.shape
+        print("predicts shape:", predicts.shape)
         preds_lengths = paddle.to_tensor([N] * B, dtype='int64')
         labels = batch[1].astype("int32")
         label_lengths = batch[2].astype('int64')
