@@ -175,6 +175,8 @@ class GSRM(nn.Layer):
         enc_inputs_1 = [word1, gsrm_word_pos, gsrm_slf_attn_bias1]
         enc_inputs_2 = [word2, gsrm_word_pos, gsrm_slf_attn_bias2]
 
+        print("enc_inputs_1:", [word1.shape, gsrm_word_pos.shape, gsrm_slf_attn_bias1.shape])
+        exit()
         gsrm_feature1 = self.wrap_encoder0(enc_inputs_1)
         gsrm_feature2 = self.wrap_encoder1(enc_inputs_2)
 

@@ -24,14 +24,27 @@ class CTCLoss(nn.Layer):
     def __init__(self, **kwargs):
         super(CTCLoss, self).__init__()
         self.loss_func = nn.CTCLoss(blank=0, reduction='none')
+        self.srn_loss_func = paddle.nn.loss.CrossEntropyLoss(reduction="sum")
 
     def forward(self, predicts, batch):
-        predicts = predicts.transpose((1, 0, 2))
+        ctc_predicts = predicts["predict"]
+        word_predict = predicts["word_out"]
+        gsrm_predict = predicts["gsrm_out"]
+        predicts = ctc_predicts.transpose((1, 0, 2))
         N, B, _ = predicts.shape
-        print("predicts shape:", predicts.shape)
         preds_lengths = paddle.to_tensor([N] * B, dtype='int64')
         labels = batch[1].astype("int32")
         label_lengths = batch[2].astype('int64')
-        loss = self.loss_func(predicts, labels, preds_lengths, label_lengths)
-        loss = loss.mean()  # sum
-        return {'loss': loss}
+        ctc_loss = self.loss_func(predicts, labels, preds_lengths, label_lengths)
+        ctc_loss = paddle.reshape(x=paddle.sum(ctc_loss), shape=[1])
+
+        casted_label = paddle.cast(x=labels, dtype='int64')
+        casted_label = paddle.reshape(x=casted_label, shape=[-1, 1])
+        cost_word = self.srn_loss_func(word_predict, label=casted_label)
+        cost_gsrm = self.srn_loss_func(gsrm_predict, label=casted_label)
+        cost_word = paddle.reshape(x=paddle.sum(cost_word), shape=[1])
+        cost_gsrm = paddle.reshape(x=paddle.sum(cost_gsrm), shape=[1])
+
+        sum_cost = ctc_loss * 3.0 + cost_word*2.0 + cost_gsrm * 0.15
+
+        return {'loss': sum_cost, 'ctc_loss': ctc_loss, 'cost_gsrm': cost_gsrm, 'cost_word':cost_word}

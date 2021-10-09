@@ -215,10 +215,11 @@ def train(config,
             images = batch[0]
             if use_srn:
                 model_average = True
-            if use_srn or model_type == 'table' or use_nrtr:
-                preds = model(images, data=batch[1:])
-            else:
-                preds = model(images)
+            # if use_srn or model_type == 'table' or use_nrtr:
+            #     preds = model(images, data=batch[1:])
+            # else:
+            #     preds = model(images)
+            preds = model(images, data=batch[1:])
             loss = loss_class(preds, batch)
             avg_loss = loss['loss']
             avg_loss.backward()
@@ -364,10 +365,11 @@ def eval(model,
                 break
             images = batch[0]
             start = time.time()
-            if use_srn or model_type == 'table':
-                preds = model(images, data=batch[1:])
-            else:
-                preds = model(images)
+            # if use_srn or model_type == 'table':
+            #     preds = model(images, data=batch[1:])
+            # else:
+            #     preds = model(images)
+            preds = model(images, data=batch[1:])
             batch = [item.numpy() for item in batch]
             # Obtain usable results from post-processing methods
             total_time += time.time() - start

@@ -22,6 +22,7 @@ import numpy as np
 import paddle
 from paddle import ParamAttr, nn
 from paddle.nn import functional as F
+from collections import OrderedDict
 
 from .self_attention import WrapEncoder
 
@@ -83,15 +84,24 @@ class GSRM(nn.Layer):
         self.mul = lambda x: paddle.matmul(x=x,
                                            y=self.wrap_encoder0.prepare_decoder.emb0.weight,
                                            transpose_y=True)
+        self.conv0 = paddle.nn.Conv1D(
+            in_channels=80,
+            out_channels=25,
+            kernel_size=1)
 
     def forward(self, inputs, gsrm_word_pos, gsrm_slf_attn_bias1,
                 gsrm_slf_attn_bias2):
         # ===== GSRM Visual-to-semantic embedding block =====
-        b, t, c = inputs.shape
+        b, c, h, w = inputs.shape
+        ### trans channel
+        inputs = paddle.reshape(inputs, [-1, h*w, c])
+        inputs = self.conv0(inputs)
+
         pvam_features = paddle.reshape(inputs, [-1, c])
         word_out = self.fc0(pvam_features)
         word_ids = paddle.argmax(F.softmax(word_out), axis=1)
-        word_ids = paddle.reshape(x=word_ids, shape=[-1, t, 1])
+        word_ids = paddle.reshape(x=word_ids, shape=[-1, 25, 1])
+
 
         #===== GSRM Semantic reasoning block =====
         """
@@ -106,8 +116,11 @@ class GSRM(nn.Layer):
         word1 = word1[:, :-1, :]
         word2 = word_ids
 
-        enc_inputs_1 = [word1, gsrm_word_pos, gsrm_slf_attn_bias1]
+        enc_inputs_1 = [word1, gsrm_word_pos, gsrm_slf_attn_bias1] 
         enc_inputs_2 = [word2, gsrm_word_pos, gsrm_slf_attn_bias2]
+
+        #print("enc_inputs_1:", [word1.shape, gsrm_word_pos.shape, gsrm_slf_attn_bias1.shape])   # [[128, 25, 1], [25, 1], [8, 25, 25]]
+
 
         gsrm_feature1 = self.wrap_encoder0(enc_inputs_1)
         gsrm_feature2 = self.wrap_encoder1(enc_inputs_2)
@@ -135,30 +148,15 @@ class CTCHead(nn.Layer):
                  **kwargs):
         super(CTCHead, self).__init__()
         self.char_num = out_channels
-        if mid_channels is None:
-            weight_attr, bias_attr = get_para_bias_attr(
-                l2_decay=fc_decay, k=in_channels)
-            self.fc = nn.Linear(
-                in_channels,
-                out_channels,
-                weight_attr=weight_attr,
-                bias_attr=bias_attr)
-        else:
-            weight_attr1, bias_attr1 = get_para_bias_attr(
-                l2_decay=fc_decay, k=in_channels)
-            self.fc1 = nn.Linear(
-                in_channels,
-                mid_channels,
-                weight_attr=weight_attr1,
-                bias_attr=bias_attr1)
-
-            weight_attr2, bias_attr2 = get_para_bias_attr(
-                l2_decay=fc_decay, k=mid_channels)
-            self.fc2 = nn.Linear(
-                mid_channels,
-                out_channels,
-                weight_attr=weight_attr2,
-                bias_attr=bias_attr2)
+        self.lstm = nn.LSTM(
+            in_channels, 48, direction='bidirectional', num_layers=2)
+        weight_attr, bias_attr = get_para_bias_attr(
+            l2_decay=fc_decay, k=in_channels)
+        self.fc = nn.Linear(
+            48*2,
+            out_channels,
+            weight_attr=weight_attr,
+            bias_attr=bias_attr)
         self.out_channels = out_channels
         self.mid_channels = mid_channels
         # add gsrm
@@ -178,41 +176,34 @@ class CTCHead(nn.Layer):
         self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
 
     def forward(self, x, targets=None):
+        others = targets[-4:]
+        gsrm_word_pos = others[1]
+        gsrm_slf_attn_bias1 = others[2]
+        gsrm_slf_attn_bias2 = others[3]
 
-        print("x shape:", x.shape) #(bs, channel, h, w)
-        b,c,h,w = x.shape
+
+        b,c,h,w = x.shape #(bs, 512, 1, 80)
         feature_dim = h*w
-        exit()
-
-        encoder_word_pos = np.array(range(0, feature_dim)).reshape(
-            (feature_dim, 1)).astype('int64')
-            
-        gsrm_word_pos = np.array(range(0, max_text_length)).reshape(
-            (max_text_length, 1)).astype('int64')
-
-        gsrm_attn_bias_data = np.ones((1, max_text_length, max_text_length))
-        gsrm_slf_attn_bias1 = np.triu(gsrm_attn_bias_data, 1).reshape(
-            [1, max_text_length, max_text_length])
-        gsrm_slf_attn_bias1 = np.tile(gsrm_slf_attn_bias1,
-                                    [num_heads, 1, 1]) * [-1e9]
-
-        gsrm_slf_attn_bias2 = np.tril(gsrm_attn_bias_data, -1).reshape(
-            [1, max_text_length, max_text_length])
-        gsrm_slf_attn_bias2 = np.tile(gsrm_slf_attn_bias2,
-                                    [num_heads, 1, 1]) * [-1e9]
-
-        # if self.mid_channels is None:
-        #     predicts = self.fc(x)
-        # else:
-        #     predicts = self.fc1(x)
-        #     predicts = self.fc2(predicts)
-
-
         
         gsrm_feature, word_out, gsrm_out = self.gsrm(
-            x, gsrm_word_pos, gsrm_slf_attn_bias1,
-            gsrm_slf_attn_bias2)
+            x, paddle.to_tensor(gsrm_word_pos), paddle.to_tensor(gsrm_slf_attn_bias1),
+            paddle.to_tensor(gsrm_slf_attn_bias2))
+
+        B, C, H, W = x.shape
+        assert H == 1
+        x = x.squeeze(axis=2)
+        x = x.transpose([0, 2, 1])  # (NTC)(batch, width, channels)
+        x, _ = self.lstm(x)
+        ctc_predicts = self.fc(x)
             
         if not self.training:
-            predicts = F.softmax(predicts, axis=2)
+            ctc_predict = F.softmax(ctc_predicts, axis=2)
+            predicts = {'predict':ctc_predict}
+
+        else:
+            predicts = OrderedDict([
+                ('predict', ctc_predicts),
+                ('word_out', word_out),
+                ('gsrm_out', gsrm_out),
+            ])
         return predicts

@@ -71,6 +71,8 @@ class RecResizeImg(object):
         self.image_shape = image_shape
         self.infer_mode = infer_mode
         self.character_type = character_type
+        self.num_heads = 8
+        self.max_text_length=25
 
     def __call__(self, data):
         img = data['image']
@@ -79,6 +81,12 @@ class RecResizeImg(object):
         else:
             norm_img = resize_norm_img(img, self.image_shape)
         data['image'] = norm_img
+        [encoder_word_pos, gsrm_word_pos, gsrm_slf_attn_bias1, gsrm_slf_attn_bias2] = \
+            srn_other_inputs(self.image_shape, self.num_heads, self.max_text_length)
+        data['encoder_word_pos'] = encoder_word_pos
+        data['gsrm_word_pos'] = gsrm_word_pos
+        data['gsrm_slf_attn_bias1'] = gsrm_slf_attn_bias1
+        data['gsrm_slf_attn_bias2'] = gsrm_slf_attn_bias2
         return data
 
 

@@ -62,6 +62,8 @@ class LMDBDataSet(Dataset):
         total_sample_num = 0
         for lno in range(lmdb_num):
             total_sample_num += self.lmdb_sets[lno]['num_samples']
+            print("dirpath:", self.lmdb_sets[lno]['dirpath'])
+            print("tmp_sample_num:", self.lmdb_sets[lno]['num_samples'])
         data_idx_order_list = np.zeros((total_sample_num, 2))
         beg_idx = 0
         for lno in range(lmdb_num):
