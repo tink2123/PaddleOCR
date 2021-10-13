@@ -136,8 +136,8 @@ class GSRM(nn.Layer):
         b, t, c = gsrm_out.shape
         gsrm_out = paddle.reshape(gsrm_out, [-1, c])
 
-        return gsrm_features, word_out, gsrm_out
-
+        #return gsrm_features, word_out, gsrm_out
+        return gsrm_features, gsrm_out
 
 class CTCHead(nn.Layer):
     def __init__(self,
@@ -176,18 +176,19 @@ class CTCHead(nn.Layer):
         self.gsrm.wrap_encoder1.prepare_decoder.emb0 = self.gsrm.wrap_encoder0.prepare_decoder.emb0
 
     def forward(self, x, targets=None):
-        others = targets[-4:]
-        gsrm_word_pos = others[1]
-        gsrm_slf_attn_bias1 = others[2]
-        gsrm_slf_attn_bias2 = others[3]
+        #others = targets[-4:]
+        #gsrm_word_pos = others[1]
+        #gsrm_slf_attn_bias1 = others[2]
+        #gsrm_slf_attn_bias2 = others[3]
 
 
-        b,c,h,w = x.shape #(bs, 512, 1, 80)
-        feature_dim = h*w
-        
-        gsrm_feature, word_out, gsrm_out = self.gsrm(
-            x, paddle.to_tensor(gsrm_word_pos), paddle.to_tensor(gsrm_slf_attn_bias1),
-            paddle.to_tensor(gsrm_slf_attn_bias2))
+        #b,c,h,w = x.shape #(bs, 512, 1, 80)
+        #feature_dim = h*w
+        #
+        ##gsrm_feature, word_out, gsrm_out 
+        #gsrm_feature, gsrm_out = self.gsrm(
+        #    x, paddle.to_tensor(gsrm_word_pos), paddle.to_tensor(gsrm_slf_attn_bias1),
+        #    paddle.to_tensor(gsrm_slf_attn_bias2))
 
         B, C, H, W = x.shape
         assert H == 1
@@ -201,9 +202,23 @@ class CTCHead(nn.Layer):
             predicts = {'predict':ctc_predict}
 
         else:
+            others = targets[-4:]
+            gsrm_word_pos = others[1]
+            gsrm_slf_attn_bias1 = others[2]
+            gsrm_slf_attn_bias2 = others[3]
+    
+    
+            b,c,h,w = x.shape #(bs, 512, 1, 80)
+            feature_dim = h*w
+    
+            #gsrm_feature, word_out, gsrm_out 
+            gsrm_feature, gsrm_out = self.gsrm(
+                x, paddle.to_tensor(gsrm_word_pos), paddle.to_tensor(gsrm_slf_attn_bias1),
+                paddle.to_tensor(gsrm_slf_attn_bias2))
+    
             predicts = OrderedDict([
                 ('predict', ctc_predicts),
-                ('word_out', word_out),
+                #('word_out', word_out),
                 ('gsrm_out', gsrm_out),
             ])
         return predicts

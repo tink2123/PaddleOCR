@@ -33,10 +33,12 @@ from tools.program import load_config, merge_config, ArgsParser
 
 def export_single_model(model, arch_config, save_path, logger):
     if arch_config["algorithm"] == "SRN":
-        max_text_length = arch_config["Head"]["max_text_length"]
+    #if True:
+        #max_text_length = arch_config["Head"]["max_text_length"]
+        max_text_length = 25
         other_shape = [
             paddle.static.InputSpec(
-                shape=[None, 1, 64, 256], dtype="float32"), [
+                shape=[None, 3, 32, 320], dtype="float32"), [
                     paddle.static.InputSpec(
                         shape=[None, 256, 1],
                         dtype="int64"), paddle.static.InputSpec(
