@@ -16,7 +16,8 @@ import math
 import cv2
 import numpy as np
 import random
-from PIL import Image
+#from PIL import Image
+from PIL import Image, ImageFilter
 from .text_image_aug import tia_perspective, tia_stretch, tia_distort
 
 
@@ -287,6 +288,36 @@ def get_crop(image):
         crop_img = crop_img[0:h - top_crop, :, :]
     return crop_img
 
+def dilation(image):
+    kernel_size = 3
+    img = img.filter(ImageFilter.MaxFilter(kernel_size))
+    return img
+
+def erosion(image):
+    kernel_size = 3
+    img = img.filter(ImageFilter.MinFilter(kernel_size))
+    return img
+
+def underline(image):
+    img_np = np.array(img.convert('L'))
+    black_pixels = np.where(img_np < 50)
+    try:
+        y1 = max(black_pixels[0])
+        x0 = min(black_pixels[1])
+        x1 = max(black_pixels[1])
+    except:
+        return img
+    for x in range(x0, x1):
+        for y in range(y1, y1-3, -1):
+            try:
+                img.putpixel((x, y), (0, 0, 0))
+            except:
+                continue
+    return img
+
+def rotate(image):
+    img = image.rotate(10, expand=True, fill=255)
+    return img
 
 class Config:
     """
@@ -330,8 +361,10 @@ class Config:
         self.jitter = True
         self.blur = True
         self.color = True
-
-
+        self.dilation = False
+        self.erosion = False
+        self.rotate = False
+        self.underline = False
 def rad(x):
     """
     rad
@@ -459,4 +492,18 @@ def warp(img, ang, use_tia=True, prob=0.4):
     if config.reverse:
         if random.random() <= prob:
             new_img = 255 - new_img
+    new_img = Image.fromarray(cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB))
+    if config.dilation:
+        if random.random() <= prob:
+            new_img = dilation(new_img)
+    if config.erosion:
+        if random.random() <= prob:
+            new_img = erosion(new_img)
+    if config.rotate:
+        if random.random() <= prob:
+            new_img = rotate(new_img)
+    if config.underline:
+        if random.random() <= prob:
+            new_img = underline(new_img) 
+    new_img = cv2.cvtColor(np.asarray(new_img), cv2.COLOR_RGB2BGR)      
     return new_img

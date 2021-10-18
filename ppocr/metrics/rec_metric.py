@@ -25,6 +25,7 @@ class RecMetric(object):
         correct_num = 0
         all_num = 0
         norm_edit_dis = 0.0
+        f = open("gsrm0.2.txt","a+")
         for (pred, pred_conf), (target, _) in zip(preds, labels):
             pred = pred.replace(" ", "")
             target = target.replace(" ", "")
@@ -32,6 +33,8 @@ class RecMetric(object):
                 len(pred), len(target), 1)
             if pred == target:
                 correct_num += 1
+            else:
+                f.write("pred:{}\t target:{}\n".format(pred, target))
             all_num += 1
         self.correct_num += correct_num
         self.all_num += all_num
