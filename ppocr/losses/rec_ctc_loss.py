@@ -47,6 +47,6 @@ class CTCLoss(nn.Layer):
         #cost_word = cost_word.mean()
         #cost_gsrm = cost_gsrm.mean()
         #sum_cost = ctc_loss * 3.0 + cost_word*2.0 + cost_gsrm * 0.15
-        sum_cost = ctc_loss + cost_gsrm * 0.1
+        sum_cost = ctc_loss + cost_gsrm * 0.2
         return {'loss': sum_cost, 'ctc_loss': ctc_loss, 'cost_gsrm': cost_gsrm}
         #return {'loss': sum_cost, 'ctc_loss': ctc_loss, 'cost_gsrm': cost_gsrm, 'cost_word':cost_word}

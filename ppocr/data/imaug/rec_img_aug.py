@@ -361,10 +361,16 @@ class Config:
         self.jitter = True
         self.blur = True
         self.color = True
-        self.dilation = False
-        self.erosion = False
-        self.rotate = False
-        self.underline = False
+        # more aug
+        self.dilation = True
+        self.erosion = True
+        self.rotate = True
+        self.underline = True
+
+        #self.dilation = False
+        #self.erosion = False
+        #self.rotate = False
+        #self.underline = False
 def rad(x):
     """
     rad
