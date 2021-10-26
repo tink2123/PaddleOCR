@@ -174,6 +174,7 @@ class NRTRLabelEncode(BaseRecLabelEncode):
         super(NRTRLabelEncode,
               self).__init__(max_text_length, character_dict_path,
                              character_type, use_space_char)
+
     def __call__(self, data):
         text = data['label']
         text = self.encode(text)
@@ -185,9 +186,11 @@ class NRTRLabelEncode(BaseRecLabelEncode):
         text = text + [0] * (self.max_text_len - len(text))
         data['label'] = np.array(text)
         return data
+
     def add_special_char(self, dict_character):
-        dict_character = ['blank','<unk>','<s>','</s>'] + dict_character
+        dict_character = ['blank', '<unk>', '<s>', '</s>'] + dict_character
         return dict_character
+
 
 class CTCLabelEncode(BaseRecLabelEncode):
     """ Convert between text-label and text-index """

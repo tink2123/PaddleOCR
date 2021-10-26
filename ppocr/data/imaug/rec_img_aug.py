@@ -73,7 +73,7 @@ class RecResizeImg(object):
         self.infer_mode = infer_mode
         self.character_type = character_type
         self.num_heads = 8
-        self.max_text_length=25
+        self.max_text_length = 50
 
     def __call__(self, data):
         img = data['image']
@@ -190,7 +190,8 @@ def resize_norm_img_srn(img, image_shape):
 def srn_other_inputs(image_shape, num_heads, max_text_length):
 
     imgC, imgH, imgW = image_shape
-    feature_dim = int((imgH / 8) * (imgW / 8))
+    #feature_dim = int((imgH / 8) * (imgW / 8))
+    feature_dim = int(80)
 
     encoder_word_pos = np.array(range(0, feature_dim)).reshape(
         (feature_dim, 1)).astype('int64')
@@ -288,17 +289,20 @@ def get_crop(image):
         crop_img = crop_img[0:h - top_crop, :, :]
     return crop_img
 
-def dilation(image):
+
+def dilation(img):
     kernel_size = 3
     img = img.filter(ImageFilter.MaxFilter(kernel_size))
     return img
 
-def erosion(image):
+
+def erosion(img):
     kernel_size = 3
     img = img.filter(ImageFilter.MinFilter(kernel_size))
     return img
 
-def underline(image):
+
+def underline(img):
     img_np = np.array(img.convert('L'))
     black_pixels = np.where(img_np < 50)
     try:
@@ -308,16 +312,18 @@ def underline(image):
     except:
         return img
     for x in range(x0, x1):
-        for y in range(y1, y1-3, -1):
+        for y in range(y1, y1 - 3, -1):
             try:
                 img.putpixel((x, y), (0, 0, 0))
             except:
                 continue
     return img
 
+
 def rotate(image):
-    img = image.rotate(10, expand=True, fill=255)
+    img = image.rotate(10, expand=True, fillcolor=255)
     return img
+
 
 class Config:
     """
@@ -364,6 +370,9 @@ class Config:
         self.dilation = True
         self.erosion = True
         self.rotate = True
+        self.underline = True
+
+
 def rad(x):
     """
     rad
@@ -491,6 +500,7 @@ def warp(img, ang, use_tia=True, prob=0.4):
     if config.reverse:
         if random.random() <= prob:
             new_img = 255 - new_img
+
     new_img = Image.fromarray(cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB))
     if config.dilation:
         if random.random() <= prob:
@@ -503,6 +513,6 @@ def warp(img, ang, use_tia=True, prob=0.4):
             new_img = rotate(new_img)
     if config.underline:
         if random.random() <= prob:
-            new_img = underline(new_img) 
-    new_img = cv2.cvtColor(np.asarray(new_img), cv2.COLOR_RGB2BGR)      
+            new_img = underline(new_img)
+    new_img = cv2.cvtColor(np.asarray(new_img), cv2.COLOR_RGB2BGR)
     return new_img

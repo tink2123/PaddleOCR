@@ -95,6 +95,7 @@ def main():
                 data = {'image': img}
             batch = transform(data, ops)
             if config['Architecture']['algorithm'] == "SRN":
+                #if True:
                 encoder_word_pos_list = np.expand_dims(batch[1], axis=0)
                 gsrm_word_pos_list = np.expand_dims(batch[2], axis=0)
                 gsrm_slf_attn_bias1_list = np.expand_dims(batch[3], axis=0)
@@ -110,9 +111,11 @@ def main():
             images = np.expand_dims(batch[0], axis=0)
             images = paddle.to_tensor(images)
             if config['Architecture']['algorithm'] == "SRN":
+                #if True:
                 preds = model(images, others)
             else:
                 preds = model(images)
+            #print("preds:", preds)
             post_result = post_process_class(preds)
             info = None
             if isinstance(post_result, dict):

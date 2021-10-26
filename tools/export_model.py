@@ -32,23 +32,24 @@ from tools.program import load_config, merge_config, ArgsParser
 
 
 def export_single_model(model, arch_config, save_path, logger):
-    if arch_config["algorithm"] == "SRN":
-    #if True:
+    #if arch_config["algorithm"] == "SRN":
+    if True:
         #max_text_length = arch_config["Head"]["max_text_length"]
-        max_text_length = 25
+        max_text_length = 50
         other_shape = [
             paddle.static.InputSpec(
-                shape=[None, 3, 32, 320], dtype="float32"), [
-                    paddle.static.InputSpec(
-                        shape=[None, 256, 1],
-                        dtype="int64"), paddle.static.InputSpec(
-                            shape=[None, max_text_length, 1], dtype="int64"),
-                    paddle.static.InputSpec(
-                        shape=[None, 8, max_text_length, max_text_length],
-                        dtype="int64"), paddle.static.InputSpec(
-                            shape=[None, 8, max_text_length, max_text_length],
-                            dtype="int64")
-                ]
+                shape=[None, 3, 32, 320], dtype="float32"),
+            [
+                paddle.static.InputSpec(
+                    shape=[None, 80, 1], dtype="int64"),
+                paddle.static.InputSpec(
+                    shape=[None, max_text_length, 1], dtype="int64"),
+                # paddle.static.InputSpec(
+                #     shape=[None, 8, max_text_length, max_text_length],
+                #     dtype="int64"), paddle.static.InputSpec(
+                #         shape=[None, 8, max_text_length, max_text_length],
+                #         dtype="int64")
+            ]
         ]
         model = to_static(model, input_spec=other_shape)
     else:
