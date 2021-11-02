@@ -47,7 +47,7 @@ class PVAM(nn.Layer):
         self.num_encoder_TUs = num_encoder_tus
         self.hidden_dims = hidden_dims
         # Transformer encoder
-        t = 256
+        t = 80
         c = 512
         self.wrap_encoder_for_feature = WrapEncoderForFeature(
             src_vocab_size=1,
@@ -66,15 +66,18 @@ class PVAM(nn.Layer):
             weight_sharing=True)
 
         # PVAM
-        self.flatten0 = paddle.nn.Flatten(start_axis=0, stop_axis=1)
-        self.fc0 = paddle.nn.Linear(
-            in_features=in_channels,
-            out_features=in_channels, )
-        self.emb = paddle.nn.Embedding(
-            num_embeddings=self.max_length, embedding_dim=in_channels)
-        self.flatten1 = paddle.nn.Flatten(start_axis=0, stop_axis=2)
-        self.fc1 = paddle.nn.Linear(
-            in_features=in_channels, out_features=1, bias_attr=False)
+        # self.flatten0 = paddle.nn.Flatten(start_axis=0, stop_axis=1)
+        # self.fc0 = paddle.nn.Linear(
+        #     in_features=in_channels,
+        #     out_features=in_channels, )
+        # self.emb = paddle.nn.Embedding(
+        #     num_embeddings=self.max_length, embedding_dim=in_channels)
+        # self.flatten1 = paddle.nn.Flatten(start_axis=0, stop_axis=2)
+        # self.fc1 = paddle.nn.Linear(
+        #     in_features=in_channels, out_features=1, bias_attr=False)
+
+        self.conv0 = paddle.nn.Conv1D(
+            in_channels=80, out_channels=50, kernel_size=1)
 
     def forward(self, inputs, encoder_word_pos, gsrm_word_pos):
         b, c, h, w = inputs.shape
@@ -85,26 +88,27 @@ class PVAM(nn.Layer):
 
         enc_inputs = [conv_features, encoder_word_pos, None]
         word_features = self.wrap_encoder_for_feature(enc_inputs)
+        word_features = self.conv0(word_features)
 
         # pvam
-        b, t, c = word_features.shape
-        word_features = self.fc0(word_features)
-        word_features_ = paddle.reshape(word_features, [-1, 1, t, c])
-        word_features_ = paddle.tile(word_features_, [1, self.max_length, 1, 1])
-        word_pos_feature = self.emb(gsrm_word_pos)
-        word_pos_feature_ = paddle.reshape(word_pos_feature,
-                                           [-1, self.max_length, 1, c])
-        word_pos_feature_ = paddle.tile(word_pos_feature_, [1, 1, t, 1])
-        # print("word_pos_feature_:{}, word_features_:{}".format(word_pos_feature_.shape, word_features_.shape))
-        y = word_pos_feature_ + word_features_
-        y = F.tanh(y)
-        attention_weight = self.fc1(y)
-        attention_weight = paddle.reshape(
-            attention_weight, shape=[-1, self.max_length, t])
-        attention_weight = F.softmax(attention_weight, axis=-1)
-        pvam_features = paddle.matmul(attention_weight,
-                                      word_features)  #[b, max_length, c]
-        return pvam_features
+        # b, t, c = word_features.shape
+        # word_features = self.fc0(word_features)
+        # word_features_ = paddle.reshape(word_features, [-1, 1, t, c])
+        # word_features_ = paddle.tile(word_features_, [1, self.max_length, 1, 1])
+        # word_pos_feature = self.emb(gsrm_word_pos)
+        # word_pos_feature_ = paddle.reshape(word_pos_feature,
+        #                                    [-1, self.max_length, 1, c])
+        # word_pos_feature_ = paddle.tile(word_pos_feature_, [1, 1, t, 1])
+        # # print("word_pos_feature_:{}, word_features_:{}".format(word_pos_feature_.shape, word_features_.shape))
+        # y = word_pos_feature_ + word_features_
+        # y = F.tanh(y)
+        # attention_weight = self.fc1(y)
+        # attention_weight = paddle.reshape(
+        #     attention_weight, shape=[-1, self.max_length, t])
+        # attention_weight = F.softmax(attention_weight, axis=-1)
+        # pvam_features = paddle.matmul(attention_weight,
+        #                               word_features)  #[b, max_length, c]
+        return word_features
 
 
 class GSRM(nn.Layer):
@@ -170,7 +174,7 @@ class GSRM(nn.Layer):
 
         b, t, c = inputs.shape
 
-        pvam_features = paddle.reshape(inputs, [-1, c])
+        pvam_features = paddle.reshape(inputs, [-1, c])  # [50, 512]
         word_out = self.fc0(pvam_features)
         word_ids = paddle.argmax(F.softmax(word_out), axis=1)
         word_ids = paddle.reshape(x=word_ids, shape=[-1, 50, 1])
@@ -191,7 +195,7 @@ class GSRM(nn.Layer):
         enc_inputs_1 = [word1, gsrm_word_pos, gsrm_slf_attn_bias1]
         enc_inputs_2 = [word2, gsrm_word_pos, gsrm_slf_attn_bias2]
 
-        #print("enc_inputs_1:", [word1.shape, gsrm_word_pos.shape, gsrm_slf_attn_bias1.shape])   # [[128, 25, 1], [25, 1], [8, 25, 25]]
+        # print("enc_inputs_1:", [word1.shape, gsrm_word_pos.shape, gsrm_slf_attn_bias1.shape])   # [[128, 25, 1], [25, 1], [8, 25, 25]]
 
         gsrm_feature1 = self.wrap_encoder0(enc_inputs_1)
         gsrm_feature2 = self.wrap_encoder1(enc_inputs_2)
@@ -254,13 +258,13 @@ class CTCHead(nn.Layer):
         self.fc = nn.Linear(
             48 * 2, out_channels, weight_attr=weight_attr, bias_attr=bias_attr)
         self.fc2 = nn.Linear(
-            512, out_channels, weight_attr=weight_attr, bias_attr=bias_attr)
+            96, out_channels, weight_attr=weight_attr, bias_attr=bias_attr)
         self.out_channels = out_channels
         self.mid_channels = mid_channels
         # add gsrm
         self.max_length = 50
         self.num_heads = 8
-        self.num_encoder_TUs = 1
+        self.num_encoder_TUs = 2
         self.num_decoder_TUs = 4
         self.hidden_dims = 512
         self.pvam = PVAM(
@@ -301,15 +305,19 @@ class CTCHead(nn.Layer):
         # x_ = x.squeeze(axis=2)
         # x_.stop_gradient = True
         # x_ = x_.transpose([0, 2, 1])  # (NTC)(batch, width, channels)
-        # x_, _ = self.lstm(x_)
-        #print("x_ feature:", x_.shape)
+        # print("x_shape:", x_.shape) # [64, 80, 512]
+        # x_, _ = self.lstm(x_) #[64, 80, 96]
+        # print("x_ feature:", x_.shape) 
         # ctc_predicts = self.fc(x_)
         # print("ctc_predicts:", ctc_predicts.shape)
         #print("ctc_predicts shape:", x_.shape)
-        pvam_feature = self.pvam(x, encoder_word_pos, gsrm_word_pos)
-        ctc_predicts = self.fc2(pvam_feature)
+        pvam_feature = self.pvam(x, encoder_word_pos,
+                                 gsrm_word_pos)  # [1, 80, 512]
+        x_, _ = self.lstm(pvam_feature)
+        ctc_predicts = self.fc2(x_)
 
         if not self.training:
+            #if False:
             # others = targets[-4:]
             # encoder_word_pos = others[0]
             # gsrm_word_pos = others[1]
@@ -336,7 +344,7 @@ class CTCHead(nn.Layer):
                 paddle.to_tensor(gsrm_slf_attn_bias1),
                 paddle.to_tensor(gsrm_slf_attn_bias2))
 
-            final_out = self.vsfd(pvam_feature, gsrm_feature)
+            #final_out = self.vsfd(pvam_feature, gsrm_feature)
             # if not self.training:
             #     final_out = F.softmax(final_out, axis=1)
 
@@ -345,6 +353,6 @@ class CTCHead(nn.Layer):
                 #('predict', final_out),
                 #('word_out', word_out),
                 ('gsrm_out', gsrm_out),
-                ('vsfd_out', final_out)
+                #('vsfd_out', final_out)
             ])
         return predicts
