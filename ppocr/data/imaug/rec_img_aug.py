@@ -503,13 +503,13 @@ def warp(img, ang, use_tia=True, prob=0.4):
 
     new_img = Image.fromarray(cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB))
     if config.dilation:
-        if random.random() <= prob:
+        if random.random() <= prob * 0.8:
             new_img = dilation(new_img)
     if config.erosion:
-        if random.random() <= prob:
+        if random.random() <= prob * 0.8:
             new_img = erosion(new_img)
     if config.rotate:
-        if random.random() <= prob:
+        if random.random() <= prob * 0.8:
             new_img = rotate(new_img)
     if config.underline:
         if random.random() <= prob:

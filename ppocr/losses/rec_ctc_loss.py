@@ -29,8 +29,8 @@ class CTCLoss(nn.Layer):
     def forward(self, predicts, batch):
         ctc_predicts = predicts["predict"]
         #word_predict = predicts["word_out"]
-        #gsrm_predict = predicts["gsrm_out"]
-        vsfd_predict = predicts["vsfd_out"]
+        gsrm_predict = predicts["gsrm_out"]
+        #vsfd_predict = predicts["vsfd_out"]
         predicts = ctc_predicts.transpose((1, 0, 2))
         N, B, _ = predicts.shape
         preds_lengths = paddle.to_tensor([N] * B, dtype='int64')
@@ -43,17 +43,17 @@ class CTCLoss(nn.Layer):
         casted_label = paddle.cast(x=labels, dtype='int64')
         casted_label = paddle.reshape(x=casted_label, shape=[-1, 1])
         #cost_word = self.srn_loss_func(word_predict, label=casted_label)
-        #cost_gsrm = self.srn_loss_func(gsrm_predict, label=casted_label)
-        cost_vsfd = self.srn_loss_func(vsfd_predict, label=casted_label)
+        cost_gsrm = self.srn_loss_func(gsrm_predict, label=casted_label)
+        #cost_vsfd = self.srn_loss_func(vsfd_predict, label=casted_label)
         #cost_word = paddle.reshape(x=paddle.sum(cost_word), shape=[1])
-        #cost_gsrm = paddle.reshape(x=paddle.sum(cost_gsrm), shape=[1])
-        cost_vsfd = paddle.reshape(x=paddle.sum(cost_vsfd), shape=[1])
+        cost_gsrm = paddle.reshape(x=paddle.sum(cost_gsrm), shape=[1])
+        #cost_vsfd = paddle.reshape(x=paddle.sum(cost_vsfd), shape=[1])
         #cost_word = cost_word.mean()
-        #cost_gsrm = cost_gsrm.mean()
+        cost_gsrm = cost_gsrm.mean()
         #sum_cost = ctc_loss * 3.0 + cost_word*2.0 + cost_gsrm * 0.15
 
         #sum_cost = ctc_loss*0.7 + cost_vsfd*0.3
-        sum_cost = ctc_loss + cost_vsfd * 0.2
+        sum_cost = ctc_loss + cost_gsrm * 0.1
 
-        return {'loss': sum_cost, 'ctc_loss': ctc_loss, 'cost_vsfd': cost_vsfd}
+        return {'loss': sum_cost, 'ctc_loss': ctc_loss, 'cost_gsrm': cost_gsrm}
         #return {'loss': sum_cost, 'ctc_loss': ctc_loss, 'cost_gsrm': cost_gsrm, 'cost_word':cost_word}

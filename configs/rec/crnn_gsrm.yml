@@ -4,7 +4,7 @@ Global:
   epoch_num: 500
   log_smooth_window: 20
   print_batch_step: 10
-  save_model_dir: ./output/26w_pvam_ctc_vsfd0.2_aug
+  save_model_dir: ./output/26w_2TU_ctc_gsrm0.1_aug0.4
   save_epoch_step: 3
   eval_batch_step:
   - 0
@@ -61,7 +61,7 @@ Train:
         img_mode: BGR
         channel_first: false
     - RecAug:
-        use_tia: true
+        use_tia: false
         aug_prob: 0.4
     - CTCLabelEncode: null
     - RecResizeImg:
@@ -80,7 +80,7 @@ Train:
         - gsrm_slf_attn_bias2
   loader:
     shuffle: true
-    batch_size_per_card: 64
+    batch_size_per_card: 128
     drop_last: true
     num_workers: 4
 Eval:
