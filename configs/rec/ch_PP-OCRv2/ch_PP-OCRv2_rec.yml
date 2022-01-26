@@ -10,7 +10,7 @@ Global:
   cal_metric_during_train: true
   pretrained_model:
   checkpoints:
-  save_inference_dir:
+  save_inference_dir: ppocr_v2
   use_visualdl: false
   infer_img: doc/imgs_words/ch/word_1.jpg
   character_dict_path: ppocr/utils/ppocr_keys_v1.txt
