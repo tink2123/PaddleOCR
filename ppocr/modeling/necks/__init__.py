@@ -19,7 +19,7 @@ def build_neck(config):
     from .db_fpn import DBFPN
     from .east_fpn import EASTFPN
     from .sast_fpn import SASTFPN
-    from .rnn import SequenceEncoder
+    from .rnn_vit import SequenceEncoder
     from .pg_fpn import PGFPN
     from .table_fpn import TableFPN
     from .fpn import FPN

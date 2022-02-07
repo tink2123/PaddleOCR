@@ -20,9 +20,7 @@ from paddle import nn
 import paddle
 import numpy as np
 
-from ppocr.modeling.heads.rec_ctc_head import get_para_bias_attr
-from ppocr.modeling.heads.self_attention import WrapEncoderForFeature
-from transformer import Transformer
+from ppocr.modeling.necks.mobilevit import MobileViTBlock, ConvNormAct, MobileV2Block
 
 class Im2Seq(nn.Layer):
     def __init__(self, in_channels, **kwargs):
@@ -69,48 +67,21 @@ class EncoderWithFC(nn.Layer):
 class EncoderWithTransformer(nn.Layer):                                                                             
     def __init__(self,                                                                                              
                  in_channels,                                                                                       
-                 num_heads,                                                                                         
-                 num_encoder_TUs,                                                                                   
-                 hidden_dims):                                                                                      
-        super(EncoderWithTransformer, self).__init__()                                                                                                                                                                     
-        self.num_heads = num_heads                                                                         
-        self.num_encoder_TUs = num_encoder_TUs                                                                      
-        self.hidden_dims = hidden_dims                                                                              
-        # encoder                                                                                                   
-        t = 256                                                                                                     
-        self.wrap_encoder_for_feature = WrapEncoderForFeature(                                                      
-            src_vocab_size=1,                                                                                       
-            max_length=t,                                                                                           
-            n_layer=self.num_encoder_TUs,                                                                           
-            n_head=self.num_heads,                                                                                  
-            d_key=int(self.hidden_dims / self.num_heads),                                                           
-            d_value=int(self.hidden_dims / self.num_heads),                                                         
-            d_model=self.hidden_dims,                                                                               
-            #d_inner_hid=512,
-            d_inner_hid=self.hidden_dims,                                                                      
-            prepostprocess_dropout=0.1,                                                                             
-            attention_dropout=0.1,                                                                                  
-            relu_dropout=0.1,                                                                                       
-            preprocess_cmd="n",                                                                                     
-            postprocess_cmd="da",                                                                                   
-            weight_sharing=True)                                                                                    
-        self.fc0 = paddle.nn.Linear(
-            in_features=self.hidden_dims,
-            out_features=64)
-        self.out_channels = 64
-    def forward(self, inputs):                                                                                      
-        b, c, h, w = inputs.shape                                                                                   
-        conv_features = paddle.reshape(inputs, shape=[-1, c, h * w])                                                
-        conv_features = paddle.transpose(conv_features, perm=[0, 2, 1])                                             
-        # transformer encoder                                                                                       
-        b, t, c = conv_features.shape                                                                               
-        word_pos = paddle.reshape(paddle.arange(h*w), shape=[h*w, 1])                                               
-        encoder_word_pos = paddle.expand(word_pos, shape=[b,h*w,1])                                                 
-        encoder_word_pos.stop_gradient = True                                                              
-        enc_inputs = [conv_features, encoder_word_pos, None]                                                        
-        word_features = self.wrap_encoder_for_feature(enc_inputs)
-        word_features = self.fc0(word_features)                                            
-        return word_features  
+                 dims=64, # XS
+                 depth=2,
+                 hidden_dims=[96, 120, 144]):                                                                                      
+        super(EncoderWithTransformer, self).__init__()
+        self.depth = depth
+        # [B, 64, 32, 32]
+        self.mvit_block_1 = MobileViTBlock(in_channels, hidden_dims[0], depth=2)
+        self.conv1x1 = ConvNormAct(in_channels, dims, kernel_size=1) 
+        self.out_channels = dims
+
+    def forward(self, x):
+        # [1,512,1,80]
+        x = self.mvit_block_1(x)
+        x = self.conv1x1(x)                     
+        return x  
 
 
 class SequenceEncoder(nn.Layer):
@@ -131,7 +102,7 @@ class SequenceEncoder(nn.Layer):
                 encoder_type, support_encoder_dict.keys())                                                        
             if encoder_type == "transformer":                                                                       
                 self.encoder = support_encoder_dict[encoder_type](                                                  
-                    self.encoder_reshape.out_channels, num_heads, num_encoder_TUs, hidden_dims)                     
+                    self.encoder_reshape.out_channels)                     
             else:                                                                                                   
                 self.encoder = support_encoder_dict[encoder_type](                                                  
                     self.encoder_reshape.out_channels, hidden_dims)                                                 
@@ -149,7 +120,8 @@ class SequenceEncoder(nn.Layer):
     def forward(self, x):                                                                                           
         # x = self.encoder_reshape(x)                                                                               
         # if not self.only_reshape:                                                                                 
-        #     x = self.encoder(x)    
-        x = self.conv(x)                                                                        
-        x = self.encoder(x)                                                                                         
+        #     x = self.encoder(x)                                                                         
+        x = self.encoder(x)
+        x = x.squeeze(axis=2)
+        x = paddle.transpose(x, perm=[0,2,1])                                                                                  
         return x   
