@@ -119,7 +119,7 @@ class Attention(nn.Layer):
     def transpose_multihead(self, x):
         # in_shape: [batch_size, P, N, hd]
         B, P, N, d = x.shape
-        x = x.reshape([B, P, N, self.num_heads, -1])
+        x = x.reshape([B, P, N, self.num_heads, d//self.num_heads])
         x = x.transpose([0, 1, 3, 2, 4])
         # out_shape: [batch_size, P, num_heads, N, d]
         return x
@@ -259,10 +259,10 @@ class MobileViTBlock(nn.Layer):
                  num_heads=8,
                  qkv_bias=True,
                  mlp_ratio=2.0,
-                 dropout=0.,
-                 attention_dropout=0.,
+                 dropout=0.1,
+                 attention_dropout=0.1,
                  droppath=0.,
-                 patch_size=(2, 2)):
+                 patch_size=(1, 1)):
         super().__init__()
         self.patch_h, self.patch_w = patch_size
 
@@ -287,31 +287,29 @@ class MobileViTBlock(nn.Layer):
     
     def forward(self, x):
         h = x
-        x = self.conv1(x)
+        # x = self.conv1(x)
         x = self.conv2(x)
+
         # [B, 96, 32, 32]
 
         B, C, H, W = x.shape
-        # B = paddle.shape(x)[0]
-        # C = paddle.shape(x)[1]
-        # H = paddle.shape(x)[2]
-        # W = paddle.shape(x)[3]
-        # print(x.shape)
-        x = x.reshape([B, C, H//self.patch_h, self.patch_w, W//self.patch_w, self.patch_w])
+        #print(x.shape)
+        # x.reshape([B, C, H//self.patch_h, self.patch_w, W//self.patch_w, self.patch_w])
+        # [B, C, H, 1, W, 1]
+        x = paddle.unsqueeze(x, axis=[3, 5])
         # [4, 96, 16, 2, 16, 2]
-        x = x.transpose([0, 1, 3, 5, 2, 4])
+        x = paddle.transpose(x, perm=[0, 1, 3, 5, 2, 4])
         # [4, 96, 2, 2, 16, 16]
-        x = x.reshape([B, C, (self.patch_h * self.patch_w), -1]) #[B, C, ws**2, n_windows**2]
+        x = x.reshape([B, C, (self.patch_h * self.patch_w), H*W]) #[B, C, ws**2, n_windows**2]
         x = x.transpose([0, 2, 3, 1]) #[B, ws**2, n_windows**2, C]
         # [4, 4, 256, 96]
         x = self.transformer(x)
         x = x.reshape([B, self.patch_h, self.patch_w, H//self.patch_h, W//self.patch_w, C])
         x = x.transpose([0, 5, 3, 1, 4, 2])
         x = x.reshape([B, C, H, W])
-
         x = self.conv3(x)
         x = paddle.concat((h, x), axis=1)
-        x = self.conv4(x)
+        #x = self.conv4(x)
         return x
 
 

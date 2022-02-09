@@ -20,7 +20,7 @@ from paddle import nn
 import paddle
 import numpy as np
 
-from ppocr.modeling.necks.mobilevit import MobileViTBlock, ConvNormAct, MobileV2Block
+from ppocr.modeling.necks.mobilevit import MobileViTBlock, ConvNormAct
 
 class Im2Seq(nn.Layer):
     def __init__(self, in_channels, **kwargs):
@@ -74,12 +74,14 @@ class EncoderWithTransformer(nn.Layer):
         self.depth = depth
         # [B, 64, 32, 32]
         self.mvit_block_1 = MobileViTBlock(in_channels, hidden_dims[0], depth=2)
-        self.conv1x1 = ConvNormAct(in_channels, dims, kernel_size=1) 
+        self.conv1x1 = ConvNormAct(in_channels*2, dims, kernel_size=1) 
         self.out_channels = dims
 
     def forward(self, x):
         # [1,512,1,80]
+        print("befor vit:", x.shape)
         x = self.mvit_block_1(x)
+        print("after vit:",x.shape)
         x = self.conv1x1(x)                     
         return x  
 
@@ -120,8 +122,9 @@ class SequenceEncoder(nn.Layer):
     def forward(self, x):                                                                                           
         # x = self.encoder_reshape(x)                                                                               
         # if not self.only_reshape:                                                                                 
-        #     x = self.encoder(x)                                                                         
+        #     x = self.encoder(x)                                                             
         x = self.encoder(x)
         x = x.squeeze(axis=2)
-        x = paddle.transpose(x, perm=[0,2,1])                                                                                  
+        x = paddle.transpose(x, perm=[0,2,1])
+        print("x.shape:", x.shape)                                                                                  
         return x   
