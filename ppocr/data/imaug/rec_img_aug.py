@@ -323,8 +323,8 @@ def jitter(img):
         s = int(random.random() * thres * 0.01)
         src_img = img.copy()
         for i in range(s):
-            img[i:, i:, :] = src_img[:w - i, :h - i, :]
-        return img
+            src_img[i:, i:, :] = img[:w - i, :h - i, :]
+        return src_img
     else:
         return img
 
@@ -401,6 +401,8 @@ class Config:
         self.jitter = True
         self.blur = True
         self.color = True
+        self.warpAffine = True
+        self.get_warpR = True
 
 
 def rad(x):
@@ -530,4 +532,31 @@ def warp(img, ang, use_tia=True, prob=0.4):
     if config.reverse:
         if random.random() <= prob:
             new_img = 255 - new_img
+    if config.get_warpR:
+        if random.random() <= prob:
+            ret, _, _, _ = get_warpR(config)
+            new_img = cv2.warpPerspective(img,ret,(w,h))
     return new_img
+
+
+
+# if __name__ == "__main__":
+#     import matplotlib.pyplot as plt
+#     # 读图
+#     img = cv2.imread("/workspace/PaddleOCR/doc/imgs_words_en/word_10.png")
+#     h, w, _ = img.shape
+#     ang = 10
+#     config = Config(use_tia=False)
+#     config.make(w, h, ang)
+#     new_img = img
+#     # 随机切割
+#     # warp_affine = get_warpAffine(config)
+#     # ret, _, _, _ = get_warpR(config)
+    
+#     # print(warp_affine)
+#     # print("======")
+#     # print(ret)
+#     # aug_img = cv2.warpPerspective(img,ret,(w,h))
+#     # cv2.imwrite("aug_img.png", aug_img)
+#     jitter_img = jitter(img)
+#     cv2.imwrite("aug_img.png", jitter_img)

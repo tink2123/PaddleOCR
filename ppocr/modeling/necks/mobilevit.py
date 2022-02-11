@@ -267,8 +267,8 @@ class MobileViTBlock(nn.Layer):
         self.patch_h, self.patch_w = patch_size
 
         # local representations
-        self.conv1 = ConvNormAct(dim, dim, padding=1)
-        self.conv2 = ConvNormAct(dim, hidden_dim, kernel_size=1)
+        self.conv1 = ConvNormAct(dim, dim//4, padding=1)
+        self.conv2 = ConvNormAct(dim//4, hidden_dim, kernel_size=1)
 
         # global representations
         self.transformer = Transformer(embed_dim=hidden_dim,
@@ -283,11 +283,11 @@ class MobileViTBlock(nn.Layer):
         # fusion
         self.conv3 = ConvNormAct(hidden_dim, dim, kernel_size=1)
         # last conv-nxn, the input is concat of input tensor and conv3 output tensor
-        self.conv4 = ConvNormAct(2 * dim, dim, padding=1)
+        self.conv4 = ConvNormAct(2 * dim, dim//4, padding=1)
     
     def forward(self, x):
         h = x
-        # x = self.conv1(x)
+        x = self.conv1(x)
         x = self.conv2(x)
 
         # [B, 96, 32, 32]
@@ -309,7 +309,7 @@ class MobileViTBlock(nn.Layer):
         x = x.reshape([B, C, H, W])
         x = self.conv3(x)
         x = paddle.concat((h, x), axis=1)
-        #x = self.conv4(x)
+        x = self.conv4(x)
         return x
 
 
