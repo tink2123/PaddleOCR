@@ -259,16 +259,16 @@ class MobileViTBlock(nn.Layer):
                  num_heads=8,
                  qkv_bias=True,
                  mlp_ratio=2.0,
-                 dropout=0.1,
-                 attention_dropout=0.1,
+                 dropout=0.0,
+                 attention_dropout=0.0,
                  droppath=0.,
                  patch_size=(1, 1)):
         super().__init__()
         self.patch_h, self.patch_w = patch_size
 
         # local representations
-        self.conv1 = ConvNormAct(dim, dim//4, padding=1)
-        self.conv2 = ConvNormAct(dim//4, hidden_dim, kernel_size=1)
+        self.conv1 = ConvNormAct(dim, dim//8, padding=1)
+        self.conv2 = ConvNormAct(dim//8, hidden_dim, kernel_size=1)
 
         # global representations
         self.transformer = Transformer(embed_dim=hidden_dim,
@@ -283,7 +283,7 @@ class MobileViTBlock(nn.Layer):
         # fusion
         self.conv3 = ConvNormAct(hidden_dim, dim, kernel_size=1)
         # last conv-nxn, the input is concat of input tensor and conv3 output tensor
-        self.conv4 = ConvNormAct(2 * dim, dim//4, padding=1)
+        self.conv4 = ConvNormAct(2 * dim, dim//8, padding=1)
     
     def forward(self, x):
         h = x

@@ -68,20 +68,20 @@ class EncoderWithTransformer(nn.Layer):
     def __init__(self,                                                                                              
                  in_channels,                                                                                       
                  dims=64, # XS
-                 depth=2,
+                 depth=4,
                  hidden_dims=[96, 120, 144]):                                                                                      
         super(EncoderWithTransformer, self).__init__()
         self.depth = depth
         # [B, 64, 32, 32]
         self.mvit_block_1 = MobileViTBlock(in_channels, hidden_dims[0], depth=2)
-        self.conv1x1 = ConvNormAct(in_channels//4, dims, kernel_size=1) 
+        self.conv1x1 = ConvNormAct(in_channels//8, dims, kernel_size=1) 
         self.out_channels = dims
 
     def forward(self, x):
         # [1,512,1,80]
-        print("befor vit:", x.shape)
+        #print("backbone:", x.shape)
         x = self.mvit_block_1(x)
-        print("after vit:",x.shape)
+        #print("conv1*1:", x.shape)
         x = self.conv1x1(x)                     
         return x  
 
@@ -126,5 +126,5 @@ class SequenceEncoder(nn.Layer):
         x = self.encoder(x)
         x = x.squeeze(axis=2)
         x = paddle.transpose(x, perm=[0,2,1])
-        print("x.shape:", x.shape)                                                                                  
+        #print("x.shape:", x.shape)                                                                                  
         return x   
