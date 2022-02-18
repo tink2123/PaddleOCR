@@ -294,7 +294,6 @@ class MobileViTBlock(nn.Layer):
 
         B, C, H, W = x.shape
         #print(x.shape)
-        # x.reshape([B, C, H//self.patch_h, self.patch_w, W//self.patch_w, self.patch_w])
         # [B, C, H, 1, W, 1]
         x = paddle.unsqueeze(x, axis=[3, 5])
         # [4, 96, 16, 2, 16, 2]

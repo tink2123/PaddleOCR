@@ -215,7 +215,7 @@ class MobileNetV1Enhance(nn.Layer):
     def forward(self, inputs):
         y = self.conv1(inputs)
         y = self.block_list(y)
-        y = self.pool(y)
+        # y = self.pool(y)
         return y
 
 

@@ -79,9 +79,7 @@ class EncoderWithTransformer(nn.Layer):
 
     def forward(self, x):
         # [1,512,1,80]
-        #print("backbone:", x.shape)
         x = self.mvit_block_1(x)
-        #print("conv1*1:", x.shape)
         x = self.conv1x1(x)                     
         return x  
 
@@ -117,14 +115,19 @@ class SequenceEncoder(nn.Layer):
             kernel_size=1,
             stride=1,
             padding=0,
-            bias_attr=False)                                                                       
+            bias_attr=False)
+        self.pool = nn.MaxPool2D(kernel_size=2, stride=2, padding=0)                                                                       
                                                                                                                     
     def forward(self, x):                                                                                           
         # x = self.encoder_reshape(x)                                                                               
         # if not self.only_reshape:                                                                                 
-        #     x = self.encoder(x)                                                             
+        #     x = self.encoder(x)
+        print("backbone out:", x.shape)                                                             
         x = self.encoder(x)
+        print("transformer out:", x.shape)
+        x = self.pool(x)
+        print("pool out:", x.shape)
         x = x.squeeze(axis=2)
         x = paddle.transpose(x, perm=[0,2,1])
-        #print("x.shape:", x.shape)                                                                                  
+        print("x.shape:", x.shape)                                                                                  
         return x   
