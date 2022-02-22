@@ -67,14 +67,14 @@ class EncoderWithFC(nn.Layer):
 class EncoderWithTransformer(nn.Layer):                                                                             
     def __init__(self,                                                                                              
                  in_channels,                                                                                       
-                 dims=64, # XS
+                 dims=128, # XS
                  depth=2,
                  hidden_dims=[96, 120, 144]):                                                                                      
         super(EncoderWithTransformer, self).__init__()
         self.depth = depth
         # [B, 64, 32, 32]
         self.mvit_block_1 = MobileViTBlock(in_channels, hidden_dims[0], depth=2)
-        self.conv1x1 = ConvNormAct(in_channels//4, dims, kernel_size=1) 
+        self.conv1x1 = ConvNormAct(in_channels//8, dims, kernel_size=1) 
         self.out_channels = dims
 
     def forward(self, x):
