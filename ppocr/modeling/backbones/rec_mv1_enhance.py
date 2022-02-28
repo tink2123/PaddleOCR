@@ -200,7 +200,7 @@ class MobileNetV1Enhance(nn.Layer):
             num_filters1=1024,
             num_filters2=1024,
             num_groups=1024,
-            stride=1,
+            stride=(1,2),
             dw_size=5,
             padding=2,
             use_se=True,
@@ -209,7 +209,8 @@ class MobileNetV1Enhance(nn.Layer):
 
         self.block_list = nn.Sequential(*self.block_list)
 
-        self.pool = nn.AdaptiveAvgPool2D(1)
+        #self.pool = nn.AdaptiveAvgPool2D(1)
+        self.pool = nn.AvgPool2D(kernel_size=2, stride=2, padding=0)
         self.out_channels = int(1024 * scale)
 
     def forward(self, inputs):

@@ -67,7 +67,7 @@ class EncoderWithFC(nn.Layer):
 class EncoderWithTransformer(nn.Layer):                                                                             
     def __init__(self,                                                                                              
                  in_channels,                                                                                       
-                 dims=128, # XS
+                 dims=64, # XS
                  depth=2,
                  hidden_dims=[96, 120, 144]):                                                                                      
         super(EncoderWithTransformer, self).__init__()
