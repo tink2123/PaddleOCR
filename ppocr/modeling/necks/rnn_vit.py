@@ -67,27 +67,27 @@ class EncoderWithFC(nn.Layer):
 class EncoderWithTransformer(nn.Layer):                                                                             
     def __init__(self,                                                                                              
                  in_channels,                                                                                       
-                 dims=64, # XS
+                 out_dims=64, # XS
                  depth=2,
-                 hidden_dims=[96, 120, 144]):                                                                                      
+                 hidden_dims=96):                                                                                      
         super(EncoderWithTransformer, self).__init__()
         self.depth = depth
         # [B, 64, 32, 32]
-        self.mvit_block_1 = MobileViTBlock(in_channels, hidden_dims[0], depth=2)
-        self.conv1x1 = ConvNormAct(in_channels//8, dims, kernel_size=1) 
-        self.out_channels = dims
+        self.mvit_block_1 = MobileViTBlock(in_channels, hidden_dims, depth=2)
+        self.conv1x1 = ConvNormAct(in_channels//8, out_dims, kernel_size=1) 
+        self.out_channels = out_dims
 
     def forward(self, x):
         # [1,512,1,80]
-        print("befor vit:", x.shape)
         x = self.mvit_block_1(x)
-        print("after vit:",x.shape)
-        x = self.conv1x1(x)                     
+        x = self.conv1x1(x)      
+        x = x.squeeze(axis=2)
+        x = paddle.transpose(x, perm=[0,2,1])               
         return x  
 
 
 class SequenceEncoder(nn.Layer):
-    def __init__(self, in_channels, encoder_type, hidden_dims=48, num_heads=8 ,num_encoder_TUs=2, **kwargs):        
+    def __init__(self, in_channels, encoder_type, out_dims=64, depth=2, hidden_dims=48, **kwargs):        
         super(SequenceEncoder, self).__init__()                                                                     
         self.encoder_reshape = Im2Seq(in_channels)                                                                  
         self.out_channels = self.encoder_reshape.out_channels                                                       
@@ -104,27 +104,16 @@ class SequenceEncoder(nn.Layer):
                 encoder_type, support_encoder_dict.keys())                                                        
             if encoder_type == "transformer":                                                                       
                 self.encoder = support_encoder_dict[encoder_type](                                                  
-                    self.encoder_reshape.out_channels)                     
+                    in_channels, out_dims, depth, hidden_dims)                     
             else:                                                                                                   
                 self.encoder = support_encoder_dict[encoder_type](                                                  
                     self.encoder_reshape.out_channels, hidden_dims)                                                 
                                                                                                                     
             self.out_channels = self.encoder.out_channels                                                           
-            self.only_reshape = False 
-        self.conv = nn.Conv2D(
-            in_channels,
-            in_channels//2,
-            kernel_size=1,
-            stride=1,
-            padding=0,
-            bias_attr=False)                                                                       
+            self.only_reshape = False                                                                      
                                                                                                                     
     def forward(self, x):                                                                                           
-        # x = self.encoder_reshape(x)                                                                               
-        # if not self.only_reshape:                                                                                 
-        #     x = self.encoder(x)                                                             
-        x = self.encoder(x)
-        x = x.squeeze(axis=2)
-        x = paddle.transpose(x, perm=[0,2,1])
-        print("x.shape:", x.shape)                                                                                  
+        # x = self.encoder_reshape(x)                                                                      
+        if not self.only_reshape:                                                                                 
+            x = self.encoder(x)                                                                                                                                           
         return x   

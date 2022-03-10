@@ -119,7 +119,7 @@ class Attention(nn.Layer):
     def transpose_multihead(self, x):
         # in_shape: [batch_size, P, N, hd]
         B, P, N, d = x.shape
-        x = x.reshape([B, P, N, self.num_heads, d//self.num_heads])
+        x = x.reshape([0, P, N, self.num_heads, d//self.num_heads])
         x = x.transpose([0, 1, 3, 2, 4])
         # out_shape: [batch_size, P, num_heads, N, d]
         return x
@@ -139,7 +139,7 @@ class Attention(nn.Layer):
         # [batch_size, P, num_heads, N, d]
         z = z.transpose([0, 1, 3, 2, 4])
         B, P, N, H, D = z.shape
-        z = z.reshape([B, P, N, H * D])
+        z = z.reshape([0, P, N, H * D])
         z = self.proj(z)
         z = self.proj_dropout(z)
         return z
@@ -293,20 +293,19 @@ class MobileViTBlock(nn.Layer):
         # [B, 96, 32, 32]
 
         B, C, H, W = x.shape
-        #print(x.shape)
-        # x.reshape([B, C, H//self.patch_h, self.patch_w, W//self.patch_w, self.patch_w])
+
         # [B, C, H, 1, W, 1]
         x = paddle.unsqueeze(x, axis=[3, 5])
         # [4, 96, 16, 2, 16, 2]
         x = paddle.transpose(x, perm=[0, 1, 3, 5, 2, 4])
         # [4, 96, 2, 2, 16, 16]
-        x = x.reshape([B, C, (self.patch_h * self.patch_w), H*W]) #[B, C, ws**2, n_windows**2]
+        x = x.reshape([0, C, (self.patch_h * self.patch_w), H*W]) #[B, C, ws**2, n_windows**2]
         x = x.transpose([0, 2, 3, 1]) #[B, ws**2, n_windows**2, C]
         # [4, 4, 256, 96]
         x = self.transformer(x)
-        x = x.reshape([B, self.patch_h, self.patch_w, H//self.patch_h, W//self.patch_w, C])
+        x = x.reshape([0, self.patch_h, self.patch_w, H//self.patch_h, W//self.patch_w, C])
         x = x.transpose([0, 5, 3, 1, 4, 2])
-        x = x.reshape([B, C, H, W])
+        x = x.reshape([0, C, H, W])
         x = self.conv3(x)
         x = paddle.concat((h, x), axis=1)
         x = self.conv4(x)
