@@ -62,24 +62,25 @@ function func_serving(){
     unset https_proxy
     unset http_proxy
     for python in ${python_list[*]}; do
+        echo ${python}
         if [ ${python} = "cpp" ]; then
             for use_gpu in ${web_use_gpu_list[*]}; do
                 if [ ${use_gpu} = "null" ]; then
-                    web_service_cpp_cmd="${python} -m paddle_serving_server.serve --model ppocr_det_mobile_2.0_serving/ ppocr_rec_mobile_2.0_serving/ --port 9293"
+                    web_service_cpp_cmd="${python_list[0]} -m paddle_serving_server.serve --model ppocr_det_mobile_2.0_serving/ ppocr_rec_mobile_2.0_serving/ --port 9293"
                     eval $web_service_cmd
                     sleep 2s
                     _save_log_path="${LOG_PATH}/server_infer_cpp_cpu_pipeline_usemkldnn_False_threads_4_batchsize_1.log"
-                    pipeline_cmd="${python} ocr_cpp_client.py ppocr_det_mobile_2.0_client/ ppocr_rec_mobile_2.0_client/"
+                    pipeline_cmd="${python_list[0]}  ocr_cpp_client.py ppocr_det_mobile_2.0_client/ ppocr_rec_mobile_2.0_client/"
                     eval $pipeline_cmd
                     status_check $last_status "${pipeline_cmd}" "${status_log}"
                     sleep 2s
                     ps ux | grep -E 'web_service|pipeline' | awk '{print $2}' | xargs kill -s 9
                 else
-                    web_service_cpp_cmd="${python} -m paddle_serving_server.serve --model ppocr_det_mobile_2.0_serving/ ppocr_rec_mobile_2.0_serving/ --port 9293 --gpu_id=0"
+                    web_service_cpp_cmd="${python_list[0]}  -m paddle_serving_server.serve --model ppocr_det_mobile_2.0_serving/ ppocr_rec_mobile_2.0_serving/ --port 9293 --gpu_id=0"
                     eval $web_service_cmd
                     sleep 2s
                     _save_log_path="${LOG_PATH}/server_infer_cpp_cpu_pipeline_usemkldnn_False_threads_4_batchsize_1.log"
-                    pipeline_cmd="${python} ocr_cpp_client.py ppocr_det_mobile_2.0_client/ ppocr_rec_mobile_2.0_client/"
+                    pipeline_cmd="${python_list[0]}  ocr_cpp_client.py ppocr_det_mobile_2.0_client/ ppocr_rec_mobile_2.0_client/"
                     eval $pipeline_cmd
                     status_check $last_status "${pipeline_cmd}" "${status_log}"
                     sleep 2s
@@ -88,13 +89,16 @@ function func_serving(){
             done
         else
             # python serving
+            echo ${web_use_gpu_list[*]}
             for use_gpu in ${web_use_gpu_list[*]}; do
                 echo ${ues_gpu}
                 if [ ${use_gpu} = "null" ]; then
+                    echo "use gpu:"${use_gpu}
                     for use_mkldnn in ${web_use_mkldnn_list[*]}; do
                         for threads in ${web_cpu_threads_list[*]}; do
                             set_cpu_threads=$(func_set_params "${web_cpu_threads_key}" "${threads}")
-                            web_service_cmd="${python} ${web_service_py} ${web_use_gpu_key}=${use_gpu} ${web_use_mkldnn_key}=${use_mkldnn} ${set_cpu_threads} &"
+                            web_service_cmd="${python} ${web_service_py} ${web_use_gpu_key}="" ${web_use_mkldnn_key}=${use_mkldnn} ${set_cpu_threads} &"
+                            cat $web_service_cmd
                             eval $web_service_cmd
                             sleep 2s
                             for pipeline in ${pipeline_py[*]}; do
