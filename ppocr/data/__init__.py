@@ -36,6 +36,7 @@ from ppocr.data.simple_dataset import SimpleDataSet
 from ppocr.data.lmdb_dataset import LMDBDataSet
 from ppocr.data.pgnet_dataset import PGDataSet
 from ppocr.data.pubtab_dataset import PubTabDataSet
+from ppocr.data.simple_dataset import BatchCompose
 
 __all__ = ['build_dataloader', 'transform', 'create_operators']
 
@@ -86,9 +87,12 @@ def build_dataloader(config, mode, device, logger, seed=None):
             shuffle=shuffle,
             drop_last=drop_last)
 
+    batch_transforms=BatchCompose(config, mode, logger)
+
     data_loader = DataLoader(
         dataset=dataset,
         batch_sampler=batch_sampler,
+        collate_fn=batch_transforms,
         places=device,
         num_workers=num_workers,
         return_list=True,

@@ -17,6 +17,8 @@ import random
 import traceback
 from paddle.io import Dataset
 from .imaug import transform, create_operators
+from paddle.fluid.dataloader.collate import default_collate_fn
+import cv2
 
 
 class SimpleDataSet(Dataset):
@@ -63,6 +65,15 @@ class SimpleDataSet(Dataset):
                                           round(len(lines) * ratio_list[idx]))
                 data_lines.extend(lines)
         return data_lines
+    
+    # def get_image_max_wh_ratio(self, img_idx_list):
+    #     data_line = data_line.decode('utf-8')
+    #     substr = data_line.strip("\n").split(self.delimiter)
+    #     file_name = substr[0]
+    #     label = substr[1]
+    #     img_path = os.path.join(self.data_dir, file_name)
+    #     return
+
 
     def shuffle_data_random(self):
         random.seed(self.seed)
@@ -101,6 +112,26 @@ class SimpleDataSet(Dataset):
         return ext_data
 
     def __getitem__(self, idx):
+        # if len(idx_all) < 2:
+        #     return None
+        # idx = idx_all[0]
+        # idx_list = idx_all[1]
+        # batch_list = []
+        # self.max_wh_ratio = 0
+        # for i in idx_list:
+        #     print("in batch:", i)
+        #     file_idx = self.data_idx_order_list[i]
+        #     data_line = self.data_lines[file_idx]
+        #     data_line = data_line.decode('utf-8')
+        #     substr = data_line.strip("\n").split(self.delimiter)
+        #     file_name = substr[0]
+        #     label = substr[1]
+        #     img_path = os.path.join(self.data_dir, file_name)
+        #     img = cv2.imread(img_path)
+        #     h = img.shape[0]
+        #     w = img.shape[1]
+        #     ratio = w / float(h)
+        #     self.max_wh_ratio = max(self.max_wh_ratio, ratio)
         file_idx = self.data_idx_order_list[idx]
         data_line = self.data_lines[file_idx]
         try:
@@ -109,6 +140,7 @@ class SimpleDataSet(Dataset):
             file_name = substr[0]
             label = substr[1]
             img_path = os.path.join(self.data_dir, file_name)
+            # data = {'img_path': img_path, 'label': label, 'wh_ratio': self.max_wh_ratio}
             data = {'img_path': img_path, 'label': label}
             if not os.path.exists(img_path):
                 raise Exception("{} does not exist!".format(img_path))
@@ -116,7 +148,8 @@ class SimpleDataSet(Dataset):
                 img = f.read()
                 data['image'] = img
             data['ext_data'] = self.get_ext_data()
-            outs = transform(data, self.ops)
+            outs = data
+            # outs = transform(data, self.ops)
         except:
             self.logger.error(
                 "When parsing line {}, error happened with msg: {}".format(
@@ -131,3 +164,53 @@ class SimpleDataSet(Dataset):
 
     def __len__(self):
         return len(self.data_idx_order_list)
+
+
+class BatchCompose(object):
+    def __init__(self, config, mode, logger):
+        self.mode = mode.lower()
+        global_config = config['Global']
+        dataset_config = config[mode]['dataset']
+        loader_config = config[mode]['loader']
+        self.ops = create_operators(dataset_config['transforms'], global_config)
+
+    def __call__(self, data):
+        batch_data = {}
+        self.max_wh_ratio = 0
+        wh_ratio = []
+        for s_data in data:
+            img_path = s_data["img_path"]
+            if len(s_data['label']) > 25:
+                continue
+            img = cv2.imread(img_path)
+            h = img.shape[0]
+            w = img.shape[1]
+            ratio = w / float(h)
+            wh_ratio.append(ratio)
+        self.mid_wh_ratio = np.median(wh_ratio)
+        self.avg_wh_ratio = np.mean(wh_ratio)
+        self.max_wh_ratio = np.max(wh_ratio)
+        print("max:{}, avg:{}, med:{}".format(self.max_wh_ratio,self.avg_wh_ratio, self.mid_wh_ratio))
+        print("self.max_wh_ratio:", self.max_wh_ratio)
+        #self.max_wh_ratio = max(self.max_wh_ratio, ratio)
+        # batch data, if user-define batch function needed
+        # use user-defined here
+        batch_data=[]
+        error_id = 0
+        for s_data in data:
+            s_data["wh_ratio"] = self.max_wh_ratio
+            try:
+                output = transform(s_data, self.ops)
+                #print("img shape:", s_data[0].shape)
+            except:
+                output = None
+            if output is None:
+                error_id += 1
+                continue
+            batch_data.append(output)
+        print("max wh ratio:", self.max_wh_ratio)
+        tmp_batch = random.sample(batch_data,error_id)
+        
+        batch_data = default_collate_fn(batch_data)
+
+        return batch_data
