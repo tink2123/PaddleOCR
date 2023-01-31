@@ -36,10 +36,25 @@ class RecAug(object):
         self.tia_prob = tia_prob
         self.bda = BaseDataAugmentation(crop_prob, reverse_prob, noise_prob,
                                         jitter_prob, blur_prob, hsv_aug_prob)
+        self.weak_aug = WeakAugmentation(crop_prob=0, reverse_prob=0, noise_prob=0,
+                                         jitter_prob=0.4,  blur_prob=0, hsv_aug_prob=0)
+        self.strong_aug = WeakAugmentation(crop_prob, reverse_prob, noise_prob,
+                                        jitter_prob, blur_prob, hsv_aug_prob)
+                
 
     def __call__(self, data):
         img = data['image']
         h, w, _ = img.shape
+
+        unl_img = data['unl_image']
+
+        weak_img = self.weak_aug(unl_img)
+        data['weak_img'] = weak_img
+
+        # strong aug
+        data['image'] = unl_img
+        strong_img = self.strong_aug(unl_img)
+        data['strong_img'] = strong_img
 
         # tia
         if random.random() <= self.tia_prob:
@@ -94,6 +109,45 @@ class BaseDataAugmentation(object):
 
         data['image'] = img
         return data
+
+class WeakAugmentation(object):
+    def __init__(self,
+                 crop_prob=0.4,
+                 reverse_prob=0.4,
+                 noise_prob=0.4,
+                 jitter_prob=0.4,
+                 blur_prob=0.4,
+                 hsv_aug_prob=0.4,
+                 **kwargs):
+        self.crop_prob = crop_prob
+        self.reverse_prob = reverse_prob
+        self.noise_prob = noise_prob
+        self.jitter_prob = jitter_prob
+        self.blur_prob = blur_prob
+        self.hsv_aug_prob = hsv_aug_prob
+
+    def __call__(self, img):
+        h, w, _ = img.shape
+
+        if random.random() <= self.crop_prob and h >= 20 and w >= 20:
+            img = get_crop(img)
+
+        if random.random() <= self.blur_prob:
+            img = blur(img)
+
+        if random.random() <= self.hsv_aug_prob:
+            img = hsv_aug(img)
+
+        if random.random() <= self.jitter_prob:
+            img = jitter(img)
+
+        if random.random() <= self.noise_prob:
+            img = add_gasuss_noise(img)
+
+        if random.random() <= self.reverse_prob:
+            img = 255 - img
+
+        return img
 
 
 class ABINetRecAug(object):
@@ -194,14 +248,27 @@ class RecResizeImg(object):
 
     def __call__(self, data):
         img = data['image']
+
         if self.infer_mode and self.character_dict_path is not None:
             norm_img, valid_ratio = resize_norm_img_chinese(img,
                                                             self.image_shape)
         else:
             norm_img, valid_ratio = resize_norm_img(img, self.image_shape,
                                                     self.padding)
+            if "weak_img" in data:
+                weak_img = data['weak_img']
+                strong_img = data['strong_img']
+                norm_weak, valid_ratio_weak = resize_norm_img(weak_img, self.image_shape,
+                                                        self.padding)
+                norm_strong, valid_ratio_strong = resize_norm_img(strong_img, self.image_shape,
+                                                        self.padding)
+                data['weak_img'] = norm_weak
+                data['strong_img'] = norm_strong
+
         data['image'] = norm_img
+
         data['valid_ratio'] = valid_ratio
+
         return data
 
 

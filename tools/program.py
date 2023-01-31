@@ -36,7 +36,9 @@ from ppocr.utils.logging import get_logger
 from ppocr.utils.loggers import VDLLogger, WandbLogger, Loggers
 from ppocr.utils import profiler
 from ppocr.data import build_dataloader
+from ppocr.modeling.architectures import build_model
 
+from ppocr.losses.rec_ctc_loss import KLDivLoss
 
 class ArgsParser(ArgumentParser):
     def __init__(self):
@@ -70,6 +72,28 @@ class ArgsParser(ArgumentParser):
             k, v = s.split('=')
             config[k] = yaml.load(v, Loader=yaml.Loader)
         return config
+
+class Averager(object):
+    """Compute average for torch.Tensor, used for loss average."""
+
+    def __init__(self):
+        self.reset()
+
+    def add(self, v):
+        count = v.numel()
+        v = v.sum()
+        self.n_count += count
+        self.sum += v
+
+    def reset(self):
+        self.n_count = 0
+        self.sum = 0
+
+    def val(self):
+        res = 0
+        if self.n_count != 0:
+            res = self.sum / float(self.n_count)
+        return res
 
 
 def load_config(file_path):
@@ -230,6 +254,19 @@ def train(config,
     model_average = False
     model.train()
 
+
+    ## semi params
+
+    alpha=0.999
+
+    target_model = build_model(config['Architecture'])
+
+    new_dict = {}
+    for (param_t_name,param_t), (param_s_name, param_s) in zip(target_model.named_parameters(),model.named_parameters()):
+        new_dict[param_t_name] = param_s
+    
+    target_model.set_state_dict(new_dict)
+
     use_srn = config['Architecture']['algorithm'] == "SRN"
     extra_input_models = [
         "SRN", "NRTR", "SAR", "SEED", "SVTR", "SPIN", "VisionLAN",
@@ -260,6 +297,14 @@ def train(config,
 
     max_iter = len(train_dataloader) - 1 if platform.system(
     ) == "Windows" else len(train_dataloader)
+
+    total_loss = {}
+
+    train_loss_avg = Averager()
+    semi_loss_avg = Averager()  # semi supervised loss avg
+    confident_ratio_avg = Averager()
+    da_loss_avg = Averager()
+    l_confident_ratio_avg = Averager()
 
     for epoch in range(start_epoch, epoch_num + 1):
         if train_dataloader.dataset.need_reset:
@@ -294,13 +339,57 @@ def train(config,
                 scaler.minimize(optimizer, scaled_avg_loss)
             else:
                 if model_type == 'table' or extra_input:
-                    preds = model(images, data=batch[1:])
+                    preds = model(images, data=batch[3:])
                 elif model_type in ["kie", 'sr']:
                     preds = model(batch)
                 else:
                     preds = model(images)
-                loss = loss_class(preds, batch)
+                loss = loss_class(preds, batch[2:])
                 avg_loss = loss['loss']
+                train_loss_avg.add(avg_loss)
+                # print("loss:", avg_loss)
+
+                semi_train = config['Architecture']['semi']
+                # print('========= start semi train ======')
+                if semi_train:
+                    new_dict = {}
+                    for (param_t_name,param_t), (param_s_name, param_s) in zip(target_model.named_parameters(),model.named_parameters()):
+                        param_t = param_t * alpha + param_s * (1. - alpha)
+                        new_dict[param_t_name] = param_t
+                    
+                    target_model.set_state_dict(new_dict)
+
+                    model_dict = {}
+
+                    weak_img = batch[1]
+                    aug_img = batch[2]
+
+                    target_model.eval()
+                    with paddle.no_grad():
+                        unl_logit = target_model(weak_img, data=batch[3:])
+                    target_model.train()
+
+                    unl_logit2 = model(aug_img, data=batch[3:])
+
+                    unl_logit = unl_logit
+                    unl_logit2 = unl_logit2["ctc"]
+
+                    criterion_SemiSL = KLDivLoss()
+
+                    loss_SemiSL, confident_ratio, l_confident_ratio = criterion_SemiSL(
+                        unl_logit,
+                        unl_logit2,
+                        iteration=idx,
+                        total_iter=max_iter,
+                        l_local_feat=None,
+                        l_logit=preds['ctc'],
+                        l_text=None)
+
+                    if confident_ratio > 0:
+                        avg_loss = avg_loss + loss_SemiSL
+                        semi_loss_avg.add(loss_SemiSL)
+                        confident_ratio_avg.add(confident_ratio)
+
                 avg_loss.backward()
                 optimizer.step()
 
@@ -317,7 +406,7 @@ def train(config,
                     if config['Loss']['name'] in ['MultiLoss', 'MultiLoss_v2'
                                                   ]:  # for multi head loss
                         post_result = post_process_class(
-                            preds['ctc'], batch[1])  # for CTC head out
+                            preds['ctc'], batch[3])  # for CTC head out
                     elif config['Loss']['name'] in ['VLLoss']:
                         post_result = post_process_class(preds, batch[1],
                                                          batch[-1])
@@ -353,15 +442,21 @@ def train(config,
                 eta_sec = ((epoch_num + 1 - epoch) * \
                     len(train_dataloader) - idx - 1) * eta_meter.avg
                 eta_sec_format = str(datetime.timedelta(seconds=int(eta_sec)))
-                strs = 'epoch: [{}/{}], global_step: {}, {}, avg_reader_cost: ' \
+                strs = 'epoch: [{}/{}], global_step: {}, {}, semi loss: {}; l_confident_ratio: {} confident ratio: {} , avg_reader_cost: ' \
                     '{:.5f} s, avg_batch_cost: {:.5f} s, avg_samples: {}, ' \
                     'ips: {:.5f} samples/s, eta: {}'.format(
                     epoch, epoch_num, global_step, logs,
+                    semi_loss_avg.val().numpy()[0], l_confident_ratio_avg.val(), confident_ratio_avg.val().numpy()[0],
                     train_reader_cost / print_batch_step,
                     train_batch_cost / print_batch_step,
                     total_samples / print_batch_step,
                     total_samples / train_batch_cost, eta_sec_format)
                 logger.info(strs)
+                
+                semi_loss_avg.reset()
+                da_loss_avg.reset()
+                l_confident_ratio_avg.reset()
+                confident_ratio_avg.reset()
 
                 total_samples = 0
                 train_reader_cost = 0.0

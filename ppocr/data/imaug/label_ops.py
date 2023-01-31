@@ -1144,6 +1144,9 @@ class MultiLabelEncode(BaseRecLabelEncode):
         data_out = dict()
         data_out['img_path'] = data.get('img_path', None)
         data_out['image'] = data['image']
+        if "weak_img" in data:
+            data_out['weak_img'] = data['weak_img']
+            data_out['strong_img'] = data['strong_img']
         ctc = self.ctc_encode.__call__(data_ctc)
         sar = self.sar_encode.__call__(data_sar)
         if ctc is None or sar is None:

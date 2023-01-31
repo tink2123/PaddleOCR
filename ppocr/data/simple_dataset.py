@@ -33,6 +33,8 @@ class SimpleDataSet(Dataset):
         self.delimiter = dataset_config.get('delimiter', '\t')
         label_file_list = dataset_config.pop('label_file_list')
         data_source_num = len(label_file_list)
+        self.semi_train = False
+
         ratio_list = dataset_config.get("ratio_list", 1.0)
         if isinstance(ratio_list, (float, int)):
             ratio_list = [float(ratio_list)] * int(data_source_num)
@@ -44,10 +46,23 @@ class SimpleDataSet(Dataset):
         self.do_shuffle = loader_config['shuffle']
         self.seed = seed
         logger.info("Initialize indexs of datasets:%s" % label_file_list)
+
         self.data_lines = self.get_image_info_list(label_file_list, ratio_list)
         self.data_idx_order_list = list(range(len(self.data_lines)))
+
+        if "unlabel_file_list" in dataset_config:
+            self.semi_train = True
+            unlabel_file_list = dataset_config.pop('unlabel_file_list')
+            unldata_source_num = len(unlabel_file_list)
+            # add unlabel data
+            self.unldata_lines = self.get_image_info_list(unlabel_file_list, [1.0])
+            self.unldata_idx_order_list = list(range(len(self.unldata_lines)))
+
         if self.mode == "train" and self.do_shuffle:
             self.shuffle_data_random()
+
+        # todo: add for unlabel dataset
+    
         self.ops = create_operators(dataset_config['transforms'], global_config)
         self.ext_op_transform_idx = dataset_config.get("ext_op_transform_idx",
                                                        2)
@@ -120,6 +135,9 @@ class SimpleDataSet(Dataset):
     def __getitem__(self, idx):
         file_idx = self.data_idx_order_list[idx]
         data_line = self.data_lines[file_idx]
+        if self.semi_train:
+            unlfile_idx = self.unldata_idx_order_list[idx]
+            unldata_line = self.unldata_lines[file_idx]
         try:
             data_line = data_line.decode('utf-8')
             substr = data_line.strip("\n").split(self.delimiter)
@@ -134,6 +152,19 @@ class SimpleDataSet(Dataset):
                 img = f.read()
                 data['image'] = img
             data['ext_data'] = self.get_ext_data()
+
+            if self.semi_train:
+                unldata_line = unldata_line.decode('utf-8')
+                substr = unldata_line.strip("\n").split(self.delimiter)
+                unlfile_name = substr[0]
+                unlfile_name = self._try_parse_filename_list(unlfile_name)
+                unlimg_path = os.path.join(self.data_dir, unlfile_name)
+                if not os.path.exists(unlimg_path):
+                    raise Exception("{} does not exist!".format(unlimg_path))
+                with open(unlimg_path, 'rb') as f:
+                    unl_image = f.read()
+                    data['unl_image'] = unl_image
+                    
             outs = transform(data, self.ops)
         except:
             self.logger.error(
